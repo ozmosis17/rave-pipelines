@@ -1,10 +1,10 @@
-groups:
-  Import Signals:
-    order: 1
-    open: no
-  Surface & Electrodes:
-    order: 7
-    open: no
+divider:
+  Preprocess:
+    order: 0
+  Built-ins:
+    order: 10
+  Settings:
+    order: 10000
 modules:
   import_lfp_native:
     label: Native Structure
@@ -62,10 +62,12 @@ modules:
     label: Stimulation Explorer
   phase_explorer:
     label: Phase Explorer
-divider:
-  Preprocess:
-    order: 0
-  Built-ins:
-    order: 10
-  Settings:
-    order: 10000
+  karaslab_fragility:
+    label: Fragility
+groups:
+  Import Signals:
+    order: 1
+    open: no
+  Surface & Electrodes:
+    order: 7
+    open: no

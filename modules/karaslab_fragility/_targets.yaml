@@ -1,0 +1,3 @@
+karaslab_fragility:
+  script: make-main.R
+  store: shared
