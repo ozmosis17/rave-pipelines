@@ -26,27 +26,29 @@ options("raveio.auto.parallel" = TRUE)
 # as if they exist.
 # Please only enter simple inputs (e.g. strings, numbers, list, ...). Do NOT
 # put functions/objects/data/environments here (there are places for that)
-raveio::save_yaml(
-  list(
-    project_name = "demo",
-    subject_code = "DemoSubject",
-    epoch_name = "auditory_onset",
-    epoch_time_window = c(-1, 2),
-    reference_name = "noref",
-    load_electrodes = "14-16",
-    analyze_electrodes = "14",
-    t_window = 100,
-    t_step = 100,
-    nlambda = 16,
-    ncores = NA,
-    trial_num = NULL
-  ),
-  # Save to module settings.yaml for debug use
-  file = file.path(dipsaus::rs_active_project(), "modules",
-                   "karaslab_fragility", "settings.yaml"))
 
-# Loads inputs & shared functions
-raveio::pipeline_setup_rmd("karaslab_fragility")
+# DIPSAUS DEBUG START
+# raveio::save_yaml(
+#   list(
+#     project_name = "OnsetZone",
+#     subject_code = "PT01",
+#     epoch_name = "PT01_sz",
+#     epoch_time_window = c(-20, 20),
+#     reference_name = "car",
+#     load_electrodes = "1:24,26:36,42:43,46:54,56:70,72:95",
+#     analyze_electrodes = "14",
+#     t_window = 100,
+#     t_step = 100,
+#     nlambda = 16,
+#     ncores = NA,
+#     trial_num = NULL
+#   ),
+#   # Save to module settings.yaml for debug use
+#   file = file.path(dipsaus::rs_active_project(), "modules",
+#                    "karaslab_fragility", "settings.yaml"))
+#
+# # Loads inputs & shared functions
+# raveio::pipeline_setup_rmd("karaslab_fragility", env = globalenv())
 
 # ---- Global, will not be in the pipeline --------------------------------
 
@@ -71,6 +73,8 @@ repository <- raveio::prepare_subject_voltage_with_epoch(
   time_windows = epoch_time_window
 )
 
+v <- repository$voltage
+
 # obtain voltage data
 # volt <- module_tools$get_voltage()
 # v <- volt$get_data()
@@ -87,15 +91,14 @@ f_info <- generate_fragility_matrix(
   ncores = ncores
 )
 
-generate_state_vectors <- function(t_start,v,trial,t_window) {
-  data <- v[trial,,]
+generate_state_vectors <- function(t_start,vmat,t_window) {
 
   state_vectors <- list(
     # x(t)
-    x = t(data)[,t_start:(t_start+t_window-2)],
+    x = vmat[,t_start:(t_start+t_window-2)],
 
     # x(t+1)
-    x_n = t(data)[,(t_start+1):(t_start+t_window-1)]
+    x_n = vmat[,(t_start+1):(t_start+t_window-1)]
   )
   return(state_vectors)
 }
@@ -103,8 +106,8 @@ generate_state_vectors <- function(t_start,v,trial,t_window) {
 generate_adj_array <- function(t_window, t_step, v, trial_num, nlambda, ncores) {
   print('Generating adjacency array')
 
-  S <- dim(v)[2] # S is total number of timepoints
-  N <- dim(v)[3] # N is number of electrodes
+  S <- length(v$dimnames$Time) # S is total number of timepoints
+  N <- length(v$dimnames$Electrode) # N is number of electrodes
 
   if(S %% t_step != 0) {
     # truncate S to greatest number evenly divisible by timestep
@@ -116,87 +119,35 @@ generate_adj_array <- function(t_window, t_step, v, trial_num, nlambda, ncores) 
   # A will be the adjacency array, contains J adjacency matrices (one per time window)
   A <- array(dim = c(N,N,J))
 
-  # adjprogress = rave::progress(title = 'Generating Adjacency Array (Step 1 of 2)', max = J)
-  # shiny::showNotification('Calculating estimated time remaining...', id = 'first_est', duration = NULL)
+  # populate adjacency array
+  raveio::lapply_async(1:J, function(k) {
+    # k is timewindow index, from 1 to J
+    t_start <- 1+(k-1)*t_step # calc timepoints within kth time window
 
-  # run multiple timewindows in parallel depending on number of cores selected
-  for (k in seq(1,J,ncores)) {
-    if (k+ncores-1 <= J) { # processing timewindow batch not adjacent to last batch
-      ks <- k:(k+ncores-1)
-
-      start_time <- Sys.time() # record how long one batch takes
-
-      # progress tracker
-      if (ncores == 1) {
-        print(paste0('Current timewindow: ', k, ' out of ', J))
-        # adjprogress$inc(paste0('Current timewindow: ', k, ' out of ', J))
-      } else {
-        print(paste0('Current timewindows: ', k, '-', k+ncores-1, ' out of ', J))
-        # for (i in ks) {
-        #   adjprogress$inc(paste0('Current timewindows: ', k, '-', k+ncores-1, ' out of ', J))
-        # }
-      }
-
-      # timepoint at start of timewindow
-      t_start <- 1+(ks-1)*t_step
-
-      # generate state vectors for timewindow batch
-      svec <- rave::lapply_async3(t_start, generate_state_vectors, v = v, trial = trial_num, t_window = t_window, .ncores = ncores)
-
-      # find adjacency matrices for timewindow batch
-      A_list <- rave::lapply_async3(svec, find_adj_matrix, N = N, t_window = t_window, nlambda = nlambda, .ncores = ncores)
-
-      A[,,ks] <- array(unlist(A_list), dim = c(N,N,length(ks)))
-
-      end_time <- Sys.time()
-      print(end_time - start_time) # record how long one batch takes
-
-      # calculate average time per batch
-      if (k == 1) {
-        # shiny::removeNotification(id = 'first_est')
-        t_avg <- 0
-      }
-      t_avg <- (t_avg*(((k-1)/ncores)) + as.numeric(difftime(end_time, start_time, units='mins')))/(((k-1)/ncores)+1)
-      # shiny::showNotification(paste0('Estimated time remaining: ', ((t_avg/ncores)*(J-k))%/%60, ' hours, ', round(((t_avg/ncores)*(J-k))%%60, digits = 1), ' minutes'), id = 'est_time', duration = NULL)
-      print(paste0('Estimated time remaining: ', ((t_avg/ncores)*(J-k))%/%60, ' hours, ', round(((t_avg/ncores)*(J-k))%%60, digits = 1), ' minutes'))
-
-    } else { # processing last timewindow batch
-      ks <- k:J
-
-      start_time <- Sys.time() # record how long one batch takes
-
-      # progress tracker
-      print(paste0('Current timewindows: ', k, '-', J, ' out of ', J))
-      # for (i in ks) {
-      #   adjprogress$inc(paste0('Current timewindows: ', k, '-', k+ncores-1, ' out of ', J))
-      # }
-
-      # timepoint at start of timewindow
-      t_start <- 1+(ks-1)*t_step
-
-      # generate state vectors for timewindow batch
-      svec <- rave::lapply_async3(t_start, generate_state_vectors, v = v, trial = trial_num, t_window = t_window, .ncores = ncores)
-
-      # generate adjacency matrices for timewindow batch
-      A_list <- rave::lapply_async3(svec, find_adj_matrix, N = N, t_window = t_window, nlambda = nlambda, .ncores = ncores)
-
-      A[,,ks] <- array(unlist(A_list), dim = c(N,N,length(ks)))
-
-      end_time <- Sys.time()
-      print(end_time - start_time) # record how long one batch takes
+    # create N by timepoints matrix of voltage values for trial_num trial
+    vmat <- matrix(nrow = N, ncol = length(v$dimnames$Time))
+    for (n in 1:v$dim[3]) {
+      e_name <- paste0('e_',v$dimnames$Electrode[n])
+      vmat[n,] <- v$data_list[[e_name]][,trial_num,1]
     }
-  }
 
-  # shiny::removeNotification(id = 'est_time')
+    # find state vectors x(t) and x(t+1) for kth timewindow
+    svec <- generate_state_vectors(t_start, vmat, t_window)
 
-  # adjprogress$close()
+    # calculate adjacency matrix for kth timewindow
+    A_list <- find_adj_matrix(svec,N, t_window, nlambda)
+
+    # convert into matrix and insert into kth slot of adjacency array
+    A[,,k] <- matrix(unlist(A_list), nrow = N, ncol = N)
+  }, callback = function(k) {
+    sprintf("Calculating...|Processing timewindow %s", k)
+  })
 
   return(A)
 }
 
 find_adj_matrix <- function(state_vectors, N, t_window, nlambda) {
   # vectorize x(t+1)
-  # state_vectors <- svec # for testing purposes
   b <- c(state_vectors$x_n)
 
   # initialize big H matrix for system of linear equations
