@@ -28,20 +28,33 @@ options("raveio.auto.parallel" = TRUE)
 # put functions/objects/data/environments here (there are places for that)
 
 # DIPSAUS DEBUG START
+# if(Sys.info()["login"] == "dipterix") {
+#   project_name <- "demo"
+#   subject_code <- "DemoSubject"
+#   epoch_name <- "auditory_onset"
+#   epoch_time_window <- c(-1,2)
+#   reference_name <- "default"
+# } else {
+#   project_name = "OnsetZone"
+#   subject_code = "PT01"
+#   epoch_name = "PT01_sz"
+#   epoch_time_window = c(-20, 20)
+#   reference_name = "car"
+# }
 # raveio::save_yaml(
 #   list(
-#     project_name = "OnsetZone",
-#     subject_code = "PT01",
-#     epoch_name = "PT01_sz",
-#     epoch_time_window = c(-20, 20),
-#     reference_name = "car",
+#     project_name = project_name,
+#     subject_code = subject_code,
+#     epoch_name = epoch_name,
+#     epoch_time_window = epoch_time_window,
+#     reference_name = reference_name,
 #     load_electrodes = "1:24,26:36,42:43,46:54,56:70,72:95",
 #     analyze_electrodes = "14",
 #     t_window = 100,
 #     t_step = 100,
 #     nlambda = 16,
 #     ncores = NA,
-#     trial_num = NULL
+#     trial_num = 1
 #   ),
 #   # Save to module settings.yaml for debug use
 #   file = file.path(dipsaus::rs_active_project(), "modules",
@@ -50,7 +63,224 @@ options("raveio.auto.parallel" = TRUE)
 # # Loads inputs & shared functions
 # raveio::pipeline_setup_rmd("karaslab_fragility", env = globalenv())
 
-# ---- Global, will not be in the pipeline --------------------------------
+# ---- Functions to be moved to shared-functions.R ----------------------------
+
+
+find_adj_matrix <- function(x, y, nlambda) {
+
+  # x <- t(state_vectors$x)
+  # y <- t(state_vectors$x_n)
+
+  nobs <- nrow(x)
+  nvars <- ncol(x)
+
+  # scale x and y
+  x <- scale(x)
+  y <- scale(y)
+  scale_x <- attr(x, "scaled:scale")
+  scale_y <- attr(y, "scaled:scale")
+
+  # guess possible lambdas
+  labmdas <- rev(lambda_path(
+    x = x, y = y, nlambda = nlambda, alpha = 0.0,
+    standardize = TRUE, intercept = FALSE))
+
+  XtY <- crossprod(x, y)
+  XtX <- crossprod(x)
+
+  # SVD decomposition to speed things up
+  # XtX == svd$u %*% diag(svd$d) %*% t(svd$v)
+  svd <- svd(XtX)
+
+  # solve(XtX) == svd$v %*% diag(1 / svd$d) %*% t(svd$u)
+  V <- svd$v
+  Ut <- t(svd$u)
+
+  # sanity check: the following should be identity matrix
+  # (XtX + diag(12, nvars)) %*% (V %*% diag(1 / (svd$d + 12)) %*% Ut)
+  UtXtY <- Ut %*% XtY
+
+  # for each, lambda, fit ridge regression
+  dipsaus::forelse(
+    x = labmdas,
+    FUN = function(lam) {
+
+      # The following 3 methods generate similar/same results
+      # MASS::lm.ridge(y[,2] ~ x - 1, lambda = lam * nobs)
+      # glmnet::glmnet(y = y[,1], x = x, intercept = FALSE, lambda = lam, alpha = 0.0)$beta
+
+      # ident <- diag(as.double(nobs), ncol(x))
+      # solve(XtX + lam * ident) %*% XtY
+
+      adj_matrix <- V %*% diag(1 / (svd$d + lam * nobs)) %*% UtXtY
+
+      # right now scale(x) %*% adj_matrix = scale(y), need to scale back
+      adj_matrix <- diag( 1 / scale_x ) %*% adj_matrix %*% diag( scale_y )
+
+
+      eigv <- abs(eigen(adj_matrix, only.values = TRUE)$values)
+      stable <- max(eigv) < 1
+
+      if( !stable ) { return() }
+      # return(list(
+      #   adj = adj_matrix,
+      #   abs_eigv = eigv,
+      #   stable = stable
+      # ))
+
+      structure(adj_matrix)
+      return(adj_matrix)
+
+    },
+    ALT_FUN = function() {
+      stop('No lambdas result in a stable adjacency matrix. Increase the number of lambdas, or (more likely) there is something wrong with your data.')
+    }
+  )
+
+}
+
+# generate_state_vectors <- function(vmat, t_start, t_window) {
+#
+#   idx <- seq_len(t_window - 1)
+#
+#   state_vectors <- list(
+#     # x(t)
+#     x = t(vmat[t_start + idx, ]),
+#
+#     # x(t+1)
+#     x_n = t(vmat[(t_start+1) + idx, ])
+#   )
+#   return(state_vectors)
+# }
+
+generate_adjacency_array <- function(repository, trial_num, t_window, t_step, nlambda) {
+  n_tps <- length(repository$voltage$dimnames$Time)
+  n_elec <- length(repository$voltage$dimnames$Electrode)
+
+  # Number of steps
+  n_steps <- floor((n_tps - t_window) / t_step) + 1
+
+  # slice of data
+  arr <- filearray::filearray_load_or_create(
+    filebase = tempfile(),
+    dimension = c(t_window, n_steps, n_elec),
+    type = "float", mode = "readwrite", partition_size = 1L,
+
+    # if repository has changed, re-calculate
+    repository_signature = repository$signature,
+    t_step = t_step, t_window = t_window,
+    trial_num = trial_num,
+
+    on_missing = function(arr) {
+      arr$set_header("ready", value = FALSE)
+    }
+  )
+
+  # check if header `ready` is not TRUE
+  if(!isTRUE(arr$get_header("ready", FALSE))) {
+
+    loaded_electrodes <- repository$electrode_list
+    raveio::lapply_async(repository$voltage$data_list, function(v) {
+      e <- dimnames(v)$Electrode
+      idx_e <- loaded_electrodes == e
+
+      trial_voltage <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
+
+      idx <- seq_len(t_window)
+      lapply(seq_len(n_steps), function(step) {
+        t_start <- 1 + (step - 1) * t_step
+        arr[, step, idx_e] <- trial_voltage[t_start + idx]
+      })
+      return()
+    })
+
+  }
+
+  # calculate adjacency arrays
+  A <- raveio::lapply_async(
+    seq_len(n_steps), function(step) {
+      slice <- arr[, step, , drop = FALSE, dimnames = NULL]
+      dm <- dim(slice)
+      nr <- nrow(slice)
+      dim(slice) <- c(nr, dm[[3]])
+      x <- slice[-nr, , drop = FALSE]
+      y <- slice[-1, , drop = FALSE]
+      as.vector(find_adj_matrix(x = x, y = y, nlambda = nlambda))
+    }
+  )
+  A <- do.call("cbind", A)
+  dim(A) <- c(n_elec, n_elec, n_steps)
+  A
+}
+
+
+find_fragility <- function(node, A_k, N, limit) {
+
+  e_k <- vector(mode = 'numeric', length = N)
+  e_k[node] <- 1
+
+  argument <- t(e_k) %*% (solve(A_k - limit*diag(N))) # column perturbation
+  # argument <- t(e_k) %*% t(solve(A_k - num*diag(N))) # row perturbation
+
+  B <- rbind(Im(argument),Re(argument))
+
+  perturb_mat <- (t(B) %*% solve(B %*% t(B)) %*% c(0,-1)) %*% t(e_k) # column
+  # perturb_mat <- e_k %*% t(t(B) %*% solve(B %*% t(B)) %*% c(0,-1)) # row
+
+  norm(perturb_mat, type = '2')
+}
+
+generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
+  print('Generating fragility matrix')
+
+  dm <- dim(A)
+  N <- dm[1]
+  J <- dm[3]
+
+  f_vals <- raveio::lapply_async(
+    seq_len(J),
+    function(k) {
+      A_k <- A[,, k]
+      fa_vals_k <- vapply(seq_len(N), function(i){
+        find_fragility(i, A_k = A_k, N = N, limit = lim)
+      }, FUN.VALUE = 0.0)
+      fa_vals_k
+    }
+  )
+  # N x J Fragility Matrix
+  f_vals <- do.call("cbind", f_vals)
+
+  dimnames(f_vals) <- list(
+    Electrode = elec,
+    Step = seq_len(J)
+  )
+
+  # # scale fragility values from 0 to 1 with 1 being most fragile
+  # for (j in 1:J) {
+  #   max_f <- max(f_vals[,j])
+  #   f_norm[,j] <- sapply(f_vals[,j], function(x) (max_f - x) / max_f)
+  # }
+
+  # scale fragility values from -1 to 1 with 1 being most fragile
+
+  # normalize, for each column (margin=2L)
+  f_norm <- apply(f_vals, 2, function(f_col) {
+    max_f <- max(f_col)
+    2.0 * (max_f - f_col) / max_f - 1.0
+  })
+
+  # find average fragility for each electrode across time
+  avg_f <- rowMeans(f_norm)
+
+  return(list(
+    vals = f_vals,
+    norm = f_norm,
+    avg = avg_f
+  ))
+}
+
+
+# ---- Analysis script --------------------------------------------------------
 
 # Load subject instance
 subject <- raveio::RAVESubject$new(project_name = project_name,
@@ -73,8 +303,6 @@ repository <- raveio::prepare_subject_voltage_with_epoch(
   time_windows = epoch_time_window
 )
 
-v <- repository$voltage
-
 # obtain voltage data
 # volt <- module_tools$get_voltage()
 # v <- volt$get_data()
@@ -82,210 +310,17 @@ v <- repository$voltage
 # voltage data are stored at `repository$voltage`
 
 # use voltage data to calculate adjacency array
-A <- generate_adj_array(t_window, t_step, v, trial_num, nlambda, ncores)
+A <- generate_adjacency_array(
+  repository = repository,
+  trial_num = trial_num,
+  t_window = t_window,
+  t_step = t_step,
+  nlambda = nlambda
+)
 
 # use adjacency array to find f_info
 f_info <- generate_fragility_matrix(
   A = A,
-  elec = attr(v, "dimnames")$Electrode,
-  ncores = ncores
+  elec = repository$electrode_list,
+  ncores = 4
 )
-
-generate_state_vectors <- function(t_start,vmat,t_window) {
-
-  state_vectors <- list(
-    # x(t)
-    x = vmat[,t_start:(t_start+t_window-2)],
-
-    # x(t+1)
-    x_n = vmat[,(t_start+1):(t_start+t_window-1)]
-  )
-  return(state_vectors)
-}
-
-generate_adj_array <- function(t_window, t_step, v, trial_num, nlambda, ncores) {
-  print('Generating adjacency array')
-
-  S <- length(v$dimnames$Time) # S is total number of timepoints
-  N <- length(v$dimnames$Electrode) # N is number of electrodes
-
-  if(S %% t_step != 0) {
-    # truncate S to greatest number evenly divisible by timestep
-    S <- trunc(S/t_step) * t_step
-  }
-
-  J <- S/t_step - (t_window/t_step) + 1 # J is number of time windows
-
-  # A will be the adjacency array, contains J adjacency matrices (one per time window)
-  A <- array(dim = c(N,N,J))
-
-  # populate adjacency array
-  raveio::lapply_async(1:J, function(k) {
-    # k is timewindow index, from 1 to J
-    t_start <- 1+(k-1)*t_step # calc timepoints within kth time window
-
-    # create N by timepoints matrix of voltage values for trial_num trial
-    vmat <- matrix(nrow = N, ncol = length(v$dimnames$Time))
-    for (n in 1:v$dim[3]) {
-      e_name <- paste0('e_',v$dimnames$Electrode[n])
-      vmat[n,] <- v$data_list[[e_name]][,trial_num,1]
-    }
-
-    # find state vectors x(t) and x(t+1) for kth timewindow
-    svec <- generate_state_vectors(t_start, vmat, t_window)
-
-    # calculate adjacency matrix for kth timewindow
-    A_list <- find_adj_matrix(svec,N, t_window, nlambda)
-
-    # convert into matrix and insert into kth slot of adjacency array
-    A[,,k] <- matrix(unlist(A_list), nrow = N, ncol = N)
-  }, callback = function(k) {
-    sprintf("Calculating...|Processing timewindow %s", k)
-  })
-
-  return(A)
-}
-
-find_adj_matrix <- function(state_vectors, N, t_window, nlambda) {
-  # vectorize x(t+1)
-  b <- c(state_vectors$x_n)
-
-  # initialize big H matrix for system of linear equations
-  H <- matrix(0, nrow = N*(t_window-1), ncol = N^2)
-
-  # populate H matrix
-  r <- 1
-  for (ii in 1:(t_window-1)) {
-    c <- 1
-    for (jj in 1:N) {
-      H[r,c:(c+N-1)] <- state_vectors$x[,ii]
-      c <- c + N
-      r <- r + 1
-    }
-  }
-
-  # solve system using glmnet package least squares, with L2-norm regularization
-  # aka ridge filtering
-
-  # find optimal lambda
-  cv.ridge <- glmnet::cv.glmnet(H, b, alpha = 0, nfolds = 3, parallel = FALSE, nlambda = nlambda)
-  lambdas <- rev(cv.ridge$lambda)
-
-  test_lambda <- function(l, H, b) {
-    ridge <- glmnet::glmnet(H, b, alpha = 0, lambda = l)
-    N <- sqrt(dim(H)[2])
-    adj_matrix <-  matrix(ridge$beta, nrow = N, ncol = N, byrow = TRUE)
-    eigv <- abs(eigen(adj_matrix, only.values = TRUE)$values)
-    stable <- max(eigv) < 1
-    list(
-      adj = adj_matrix,
-      abs_eigv = eigv,
-      stable = stable
-    )
-  }
-
-  l <- 1
-  stable_i <- FALSE
-
-  while (!stable_i) {
-    results <- test_lambda(lambdas[l], H = H, b = b)
-    stable_i <- results$stable
-
-    l <- l + 1
-
-    if (l > length(lambdas)) {
-      break
-    }
-  }
-
-  if (!stable_i) {
-    stop('No lambdas result in a stable adjacency matrix. Increase the number of lambdas, or (more likely) there is something wrong with your data.')
-  }
-
-  adj_matrix <- results$adj
-
-  return(adj_matrix)
-}
-
-find_fragility <- function(node, A_k, N, limit) {
-
-  e_k <- vector(mode = 'numeric', length = N)
-  e_k[node] <- 1
-
-  argument <- t(e_k) %*% (solve(A_k - limit*diag(N))) # column perturbation
-  # argument <- t(e_k) %*% t(solve(A_k - num*diag(N))) # row perturbation
-
-  B <- rbind(Im(argument),Re(argument))
-
-  perturb_mat <- (t(B) %*% solve(B %*% t(B)) %*% c(0,-1)) %*% t(e_k) # column
-  # perturb_mat <- e_k %*% t(t(B) %*% solve(B %*% t(B)) %*% c(0,-1)) # row
-
-  norm(perturb_mat, type = '2')
-}
-
-generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
-  print('Generating fragility matrix')
-
-  N <- dim(A)[1]
-  J <- dim(A)[3]
-  f_vals <- matrix(nrow = N, ncol = J)
-  fprogress = rave::progress(title = 'Generating Fragility Matrix (Step 2 of 2)', max = J)
-  shiny::showNotification('Calculating estimated time remaining...', id = 'first_est', duration = NULL)
-
-  for (k in 1:J) {
-    start_time <- Sys.time()
-    print(paste0('Current timewindow: ', k, ' out of ', J))
-    fprogress$inc(paste0('Current timewindow: ', k, ' out of ', J))
-
-    for (i in seq(1,N,ncores)) {
-      if (i+ncores-1 <= N) {
-        is <- i:(i+ncores-1)
-        f_vals_list <- rave::lapply_async3(is,find_fragility,A_k = A[,,k], N = N, limit = lim)
-        f_vals[is,k] <- unlist(f_vals_list)
-      } else {
-        is <- i:N
-        f_vals_list <- rave::lapply_async3(is,find_fragility,A_k = A[,,k], N = N, limit = lim)
-        f_vals[is,k] <- unlist(f_vals_list)
-      }
-    }
-
-    end_time <- Sys.time()
-    print(end_time - start_time)
-
-    if (k == 1) {
-      shiny::removeNotification(id = 'first_est')
-      t_avg <- 0
-    }
-
-    t_avg <- (t_avg*(k-1) + as.numeric(difftime(end_time, start_time, units='sec')))/k
-    shiny::showNotification(paste0('Estimated time remaining: ', (t_avg*(J-k))%/%60, ' minutes'), id = 'est_time', duration = NULL)
-  }
-
-  shiny::removeNotification(id = 'est_time')
-  fprogress$close()
-  rownames(f_vals) <- elec
-  colnames(f_vals) <- 1:J
-
-  f_norm <- f_vals
-
-  # # scale fragility values from 0 to 1 with 1 being most fragile
-  # for (j in 1:J) {
-  #   max_f <- max(f_vals[,j])
-  #   f_norm[,j] <- sapply(f_vals[,j], function(x) (max_f - x) / max_f)
-  # }
-
-  # scale fragility values from -1 to 1 with 1 being most fragile
-  for (j in 1:J) {
-    max_f <- max(f_vals[,j])
-    f_norm[,j] <- sapply(f_vals[,j], function(x) 2*(max_f - x)/max_f - 1)
-  }
-
-  # find average fragility for each electrode across time
-  avg_f <- rowMeans(f_norm)
-
-  f_info <- list(
-    vals = f_vals,
-    norm = f_norm,
-    avg = avg_f
-  )
-}
