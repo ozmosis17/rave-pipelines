@@ -81,7 +81,7 @@ find_adj_matrix <- function(x, y, nlambda) {
   scale_y <- attr(y, "scaled:scale")
 
   # guess possible lambdas
-  labmdas <- rev(lambda_path(
+  lambdas <- rev(lambda_path(
     x = x, y = y, nlambda = nlambda, alpha = 0.0,
     standardize = TRUE, intercept = FALSE))
 
@@ -102,7 +102,7 @@ find_adj_matrix <- function(x, y, nlambda) {
 
   # for each, lambda, fit ridge regression
   dipsaus::forelse(
-    x = labmdas,
+    x = lambdas,
     FUN = function(lam) {
 
       # The following 3 methods generate similar/same results
@@ -203,6 +203,7 @@ generate_adjacency_array <- function(repository, trial_num, t_window, t_step, nl
       dm <- dim(slice)
       nr <- nrow(slice)
       dim(slice) <- c(nr, dm[[3]])
+      # x is x(t) and y is x(t+1), state vectors
       x <- slice[-nr, , drop = FALSE]
       y <- slice[-1, , drop = FALSE]
       as.vector(find_adj_matrix(x = x, y = y, nlambda = nlambda))
@@ -241,10 +242,10 @@ generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
     seq_len(J),
     function(k) {
       A_k <- A[,, k]
-      fa_vals_k <- vapply(seq_len(N), function(i){
+      f_vals_k <- vapply(seq_len(N), function(i){
         find_fragility(i, A_k = A_k, N = N, limit = lim)
       }, FUN.VALUE = 0.0)
-      fa_vals_k
+      f_vals_k
     }
   )
   # N x J Fragility Matrix
@@ -279,6 +280,65 @@ generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
   ))
 }
 
+draw_heatmap <- function(f_info,requested_electrodes) {
+  f_info$norm <- f_info$norm[as.character(requested_electrodes),]
+  elecsort <- sort(as.numeric(attr(f_info$norm, "dimnames")[[1]])) # electrode indices sorted by ascending number
+  fsort <- as.numeric(attr(sort(f_info$avg), "names")) # electrode indices sorted by descending fragility
+
+  # if (sort_fmap == 'Electrode (ascending)') {
+  #   elec_order <- elecsort
+  # } else if (sort_fmap == 'Electrode (descending)') {
+  #   elec_order <- rev(elecsort)
+  # } else if (sort_fmap == 'Fragility (ascending)') {
+  #   elec_order <- fsort
+  # } else if (sort_fmap == 'Fragility (descending)') {
+  #   elec_order <- rev(fsort)
+  # }
+
+  y <- rev(elecsort) # determine what order to display electrodes in
+
+  f_info$norm <- f_info$norm[as.character(y),]
+  x <- 1:dim(f_info$norm)[2]
+  m <- t(f_info$norm)
+
+  attr(m, 'xlab') = 'Time (s)'
+  attr(m, 'ylab') = 'Electrode'
+  attr(m, 'zlab') = 'Fragility'
+
+  tp <- repository$voltage$dimnames$Time
+
+  # for electrode label spacing on y axis
+  yi = seq_along(y)
+  if(length(y) > 10) {
+    .seq = seq(1, length(y), length.out=10)
+    y = y[.seq]
+    yi = .seq
+  }
+
+  # map x axis from timewindows (x) to time (for mtext)
+  xtime <- round(seq(tp[1], tp[length(tp)], length.out = 9), digits = 2)
+  xi <- seq(1, length(x), length.out = 9)
+
+  # map seizure onset from time (from slider input) to timewindows (for abline)
+  sz_onset <- 0
+  secs <- seq(tp[1], tp[length(tp)])
+  onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset,secs)]
+
+  ravebuiltins:::draw_many_heat_maps(list(
+    list(
+      data = m,
+      x = x,
+      y = seq_along(elecsort),
+      has_trials = TRUE,
+      range = 0:1
+    )
+  ), axes = c(FALSE,FALSE), PANEL.LAST = ravebuiltins:::add_decorator(function(...) {
+    abline(v = onset, lty = 2, lwd = 2)
+    mtext(y, side=2, line=-1, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
+    mtext(xtime, side=1, line=1, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
+  }, ravebuiltins:::spectrogram_heatmap_decorator())
+  )
+}
 
 # ---- Analysis script --------------------------------------------------------
 
@@ -303,10 +363,6 @@ repository <- raveio::prepare_subject_voltage_with_epoch(
   time_windows = epoch_time_window
 )
 
-# obtain voltage data
-# volt <- module_tools$get_voltage()
-# v <- volt$get_data()
-
 # voltage data are stored at `repository$voltage`
 
 # use voltage data to calculate adjacency array
@@ -318,9 +374,95 @@ A <- generate_adjacency_array(
   nlambda = nlambda
 )
 
-# use adjacency array to find f_info
+# use adjacency array to find fragility
 f_info <- generate_fragility_matrix(
   A = A,
   elec = repository$electrode_list,
   ncores = 4
 )
+
+# verify fragility function: load previously generated adjacency matrix
+# adj_info_og <- readRDS("/Volumes/OFZ1_T7/karaslab/rave_data/data_dir/OnsetZone/PT01/rave/module_data/PT01_adj_info_trial_1")
+
+# f_info_check <- generate_fragility_matrix(
+#   A = adj_info_og$A,
+#   elec = repository$electrode_list,
+#   ncores = 4
+# )
+
+# f_info_og <- readRDS("/Volumes/OFZ1_T7/karaslab/rave_data/data_dir/OnsetZone/PT01/rave/module_data/PT01_f_info_trial_1")
+
+# TEST FRAGILITY BY CREATING HEATMAP
+# loading_elec <- c(33,34,62:69,88:91)
+
+draw_heatmap(f_info,loading_elec)
+# draw_heatmap(f_info_check,loading_elec)
+# draw_heatmap(f_info_og,loading_elec)
+
+as.numeric(attr(sort(f_info$avg), "names"))
+# as.numeric(attr(sort(f_info_og$avg), "names"))
+
+# TEST RECONSTRUCTION USING ADJACENCY MATRIX
+S <- length(repository$voltage$dimnames$Time) # S is total number of timepoints
+N <- length(repository$voltage$dimnames$Electrode) # N is number of electrodes
+
+if(S %% t_step != 0) {
+  # truncate S to greatest number evenly divisible by timestep
+  S <- trunc(S/t_step) * t_step
+}
+n_steps <- S/t_step - (t_window/t_step) + 1 # J is number of time windows
+
+# generate matrix for reconstruction of voltage trace using x(t+1) = Ax(t)
+v_recon <- filearray::filearray_load_or_create(
+  filebase = tempfile(),
+  dimension = c(t_window, n_steps, N),
+  type = "float", mode = "readwrite", partition_size = 1L,
+
+  # if repository has changed, re-calculate
+  repository_signature = repository$signature
+)
+
+raveio::lapply_async(repository$voltage$data_list, function(v) {
+  e <- dimnames(v)$Electrode
+  idx_e <- repository$electrode_list == e
+
+  trial_voltage <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
+
+  idx <- seq_len(t_window)
+  lapply(seq_len(n_steps), function(step) {
+    t_start <- 1 + (step - 1) * t_step
+    v_recon[, step, idx_e] <- trial_voltage[t_start + idx - 1]
+  })
+  return()
+})
+
+# populate v_recon using adjacency matrix A
+raveio::lapply_async(
+  seq_len(n_steps), function(step) {
+    slice <- v_recon[, step, , drop = FALSE, dimnames = NULL]
+    dm <- dim(slice)
+    nr <- nrow(slice)
+    dim(slice) <- c(nr, dm[[3]])
+    x <- slice[-nr, , drop = FALSE]
+    y <- A[,,step] %*% t(x)
+    v_recon[,step,] <- t(cbind(slice[1,],y))
+    return()
+  }
+)
+
+v_reconstructed <- v_recon[]
+dim(v_reconstructed) <- c(t_window*n_steps,N)
+
+# graph voltage traces for comparison
+par(mfrow=c(2,1),mar=rep(2,4))
+timepoints <- 1:500
+
+elec_num <- 1
+plot1 <- repository$voltage$data_list$e_1[][timepoints,elec_num]
+plot2 <- v_reconstructed[timepoints,elec_num]
+
+plot(x = timepoints, y = plot1, type = 'l')
+plot(x = timepoints, y = plot2, type = 'l')
+
+# check stability of adjacency matrix
+abs(eigen(A[,,1], only.values = TRUE)$values)
