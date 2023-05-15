@@ -340,6 +340,84 @@ draw_heatmap <- function(f_info,requested_electrodes) {
   )
 }
 
+voltage_plots <- function(repository,A,timepoints,elec_num) {
+  require(ggplot2)
+
+  S <- length(repository$voltage$dimnames$Time) # S is total number of timepoints
+  N <- length(repository$voltage$dimnames$Electrode) # N is number of electrodes
+
+  if(S %% t_step != 0) {
+    # truncate S to greatest number evenly divisible by timestep
+    S <- trunc(S/t_step) * t_step
+  }
+  n_steps <- S/t_step - (t_window/t_step) + 1 # J is number of time windows
+
+  # generate matrix for reconstruction of voltage trace using x(t+1) = Ax(t)
+  v_recon <- filearray::filearray_load_or_create(
+    filebase = tempfile(),
+    dimension = c(t_window, n_steps, N),
+    type = "float", mode = "readwrite", partition_size = 1L,
+
+    # if repository has changed, re-calculate
+    repository_signature = repository$signature
+  )
+
+  raveio::lapply_async(repository$voltage$data_list, function(v) {
+    e <- dimnames(v)$Electrode
+    idx_e <- repository$electrode_list == e
+
+    trial_voltage <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
+
+    idx <- seq_len(t_window)
+    lapply(seq_len(n_steps), function(step) {
+      t_start <- 1 + (step - 1) * t_step
+      v_recon[, step, idx_e] <- trial_voltage[t_start + idx - 1]
+    })
+    return()
+  })
+
+  v_trace <- v_recon[]
+  dim(v_trace) <- c(t_window*n_steps,N)
+
+  # populate v_recon using adjacency matrix A
+  raveio::lapply_async(
+    seq_len(n_steps), function(step) {
+      slice <- v_recon[, step, , drop = FALSE, dimnames = NULL]
+      dm <- dim(slice)
+      nr <- nrow(slice)
+      dim(slice) <- c(nr, dm[[3]])
+      x <- slice[-nr, , drop = FALSE]
+      y <- A[,,step] %*% t(x)
+      v_recon[,step,] <- t(cbind(slice[1,],y))
+      return()
+    }
+  )
+
+  v_reconstructed <- v_recon[]
+  dim(v_reconstructed) <- c(t_window*n_steps,N)
+
+  # graph voltage traces for comparison
+
+  y1 <- v_trace[timepoints,elec_num]
+  y2 <- v_reconstructed[timepoints,elec_num]
+  df <- data.frame(timepoints,y1,y2)
+
+  g <- ggplot(df, aes(timepoints)) +
+    geom_line(aes(y=y1, color = "original")) +
+    geom_line(aes(y=y2, color = "reconstructed")) +
+    labs(x = "Time (ms)", y = "Voltage", color = "Legend") +
+    scale_color_manual(values = c("original" = 'black', "reconstructed" = "red"))
+
+
+  #plot(x = timepoints, y = y1, type = 'l', main = 'original)
+  #plot(x = timepoints, y = y2, type = 'l', main = 'reconstructed')
+
+  # check stability of adjacency matrix
+  eigv <- abs(eigen(A[,,1], only.values = TRUE)$values)
+  print(paste0('largest eigenvalue norm: ', max(eigv)))
+  g
+}
+
 # ---- Analysis script --------------------------------------------------------
 
 # Load subject instance
@@ -403,66 +481,4 @@ as.numeric(attr(sort(f_info$avg), "names"))
 # as.numeric(attr(sort(f_info_og$avg), "names"))
 
 # TEST RECONSTRUCTION USING ADJACENCY MATRIX
-S <- length(repository$voltage$dimnames$Time) # S is total number of timepoints
-N <- length(repository$voltage$dimnames$Electrode) # N is number of electrodes
-
-if(S %% t_step != 0) {
-  # truncate S to greatest number evenly divisible by timestep
-  S <- trunc(S/t_step) * t_step
-}
-n_steps <- S/t_step - (t_window/t_step) + 1 # J is number of time windows
-
-# generate matrix for reconstruction of voltage trace using x(t+1) = Ax(t)
-v_recon <- filearray::filearray_load_or_create(
-  filebase = tempfile(),
-  dimension = c(t_window, n_steps, N),
-  type = "float", mode = "readwrite", partition_size = 1L,
-
-  # if repository has changed, re-calculate
-  repository_signature = repository$signature
-)
-
-raveio::lapply_async(repository$voltage$data_list, function(v) {
-  e <- dimnames(v)$Electrode
-  idx_e <- repository$electrode_list == e
-
-  trial_voltage <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
-
-  idx <- seq_len(t_window)
-  lapply(seq_len(n_steps), function(step) {
-    t_start <- 1 + (step - 1) * t_step
-    v_recon[, step, idx_e] <- trial_voltage[t_start + idx - 1]
-  })
-  return()
-})
-
-# populate v_recon using adjacency matrix A
-raveio::lapply_async(
-  seq_len(n_steps), function(step) {
-    slice <- v_recon[, step, , drop = FALSE, dimnames = NULL]
-    dm <- dim(slice)
-    nr <- nrow(slice)
-    dim(slice) <- c(nr, dm[[3]])
-    x <- slice[-nr, , drop = FALSE]
-    y <- A[,,step] %*% t(x)
-    v_recon[,step,] <- t(cbind(slice[1,],y))
-    return()
-  }
-)
-
-v_reconstructed <- v_recon[]
-dim(v_reconstructed) <- c(t_window*n_steps,N)
-
-# graph voltage traces for comparison
-par(mfrow=c(2,1),mar=rep(2,4))
-timepoints <- 1:500
-
-elec_num <- 1
-plot1 <- repository$voltage$data_list$e_1[][timepoints,elec_num]
-plot2 <- v_reconstructed[timepoints,elec_num]
-
-plot(x = timepoints, y = plot1, type = 'l')
-plot(x = timepoints, y = plot2, type = 'l')
-
-# check stability of adjacency matrix
-abs(eigen(A[,,1], only.values = TRUE)$values)
+voltage_plots(repository,A,timepoints = 1:1000, elec_num = 50)
