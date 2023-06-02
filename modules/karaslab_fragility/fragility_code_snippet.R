@@ -38,7 +38,7 @@ options("raveio.auto.parallel" = TRUE)
 #   project_name = "OnsetZone"
 #   subject_code = "PT01"
 #   epoch_name = "PT01_sz"
-#   epoch_time_window = c(-20, 20)
+#   epoch_time_window = c(-10, 10)
 #   reference_name = "car"
 # }
 # raveio::save_yaml(
@@ -50,8 +50,8 @@ options("raveio.auto.parallel" = TRUE)
 #     reference_name = reference_name,
 #     load_electrodes = "1:24,26:36,42:43,46:54,56:70,72:95",
 #     analyze_electrodes = "14",
-#     t_window = 100,
-#     t_step = 100,
+#     t_window = 250,
+#     t_step = 125,
 #     nlambda = 16,
 #     ncores = NA,
 #     trial_num = 1
@@ -109,9 +109,11 @@ find_adj_matrix <- function(x, y, nlambda) {
       # MASS::lm.ridge(y[,2] ~ x - 1, lambda = lam * nobs)
       # glmnet::glmnet(y = y[,1], x = x, intercept = FALSE, lambda = lam, alpha = 0.0)$beta
 
+      # no SVD method
       # ident <- diag(as.double(nobs), ncol(x))
-      # solve(XtX + lam * ident) %*% XtY
+      # adj_matrix <- solve(XtX + lam * ident) %*% XtY
 
+      # SVD method
       adj_matrix <- V %*% diag(1 / (svd$d + lam * nobs)) %*% UtXtY
 
       # right now scale(x) %*% adj_matrix = scale(y), need to scale back
@@ -207,6 +209,7 @@ generate_adjacency_array <- function(repository, trial_num, t_window, t_step, nl
       x <- slice[-nr, , drop = FALSE]
       y <- slice[-1, , drop = FALSE]
       as.vector(find_adj_matrix(x = x, y = y, nlambda = nlambda))
+      # as.vector(find_adj_matrix_bij(x = x, y = y))
     }
   )
   A <- do.call("cbind", A)
@@ -264,10 +267,14 @@ generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
 
   # scale fragility values from -1 to 1 with 1 being most fragile
 
+  # max_f <- max(f_vals)
+  # min_f <- min(f_vals)
   # normalize, for each column (margin=2L)
   f_norm <- apply(f_vals, 2, function(f_col) {
     max_f <- max(f_col)
-    2.0 * (max_f - f_col) / max_f - 1.0
+    min_f <- min(f_col)
+    2.0 * (f_col - min_f) / (max_f - min_f) - 1.0 # normalize from -1 to 1
+    #(f_col - min_f) / (max_f - min_f) # normalize from 0 to 1
   })
 
   # find average fragility for each electrode across time
@@ -481,4 +488,4 @@ as.numeric(attr(sort(f_info$avg), "names"))
 # as.numeric(attr(sort(f_info_og$avg), "names"))
 
 # TEST RECONSTRUCTION USING ADJACENCY MATRIX
-voltage_plots(repository,A,timepoints = 1:1000, elec_num = 50)
+voltage_plots(repository,A,timepoints = 1:500, elec_num = 1)
