@@ -37,7 +37,7 @@ options("raveio.auto.parallel" = TRUE)
 # } else {
 #   project_name = "OnsetZone"
 #   subject_code = "PT01"
-#   epoch_name = "PT01_sz"
+#   epoch_name = "seizure_onset"
 #   epoch_time_window = c(-10, 10)
 #   reference_name = "car"
 # }
@@ -49,12 +49,12 @@ options("raveio.auto.parallel" = TRUE)
 #     epoch_time_window = epoch_time_window,
 #     reference_name = reference_name,
 #     load_electrodes = "1:24,26:36,42:43,46:54,56:70,72:95",
-#     analyze_electrodes = "14",
 #     t_window = 250,
 #     t_step = 125,
 #     nlambda = 16,
 #     ncores = NA,
-#     trial_num = 1
+#     trial_num = 1,
+#     sz_onset = 0
 #   ),
 #   # Save to module settings.yaml for debug use
 #   file = file.path(dipsaus::rs_active_project(), "modules",

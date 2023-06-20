@@ -1,5 +1,5 @@
 ---
-title: "RAVE Pipeline Markdown Template"
+title: "RAVE Fragility"
 output:
   html_document: default
   pdf_document: default
@@ -41,7 +41,8 @@ Noting that all the items in the `settings.yaml` are available as variables.
 library(raveio)
 subject <- RAVESubject$new(
   project_name = project_name, 
-  subject_code = subject_code
+  subject_code = subject_code,
+  strict = TRUE
 )
 print(subject)
 
@@ -53,171 +54,119 @@ subject$electrodes
 
 # Check if notch & wavelet has been applied on all electrodes
 all(subject$notch_filtered)
-all(subject$has_wavelet)
 ```
 
 With `export="subject"`, the subject variable will be registered for the following chunks to use. Be aware that all other variables created in this block will not be exposed.
 
-#### Step 2: Load epoch and reference information
-
-```{rave load_epoch, language = "R", export = "epoch_instance"}
-epoch_instance <- raveio::RAVEEpoch$new(subject, epoch)
-head(epoch_instance$update_table())
-```
-
-```{rave load_reference, language = "R", export = "reference_table"}
-reference_table <- subject$meta_data(
-  meta_type = "reference", reference)
-head(reference_table)
-```
-
-#### Step 3: Initialize and load power data
+#### Step 2: Initialize and load voltage data
 
 Initialize the electrode instances and register the epoch, reference information
 
-```{rave load_electrodes, language = "R", export = "electrode_instances"}
-requested_electrodes <- dipsaus::parse_svec(electrodes)
-requested_electrodes <- requested_electrodes[
-  requested_electrodes %in% subject$electrodes]
-electrode_instances <- lapply(requested_electrodes, function(ei){
-  e <- raveio::new_electrode(subject, number = ei, signal_type = "LFP")
-  
-  # set epoch
-  e$set_epoch(epoch_instance)
-
-  # set epoch range (-1 to 2 seconds relative to onset)
-  e$trial_intervals <- intervals
-
-  # set reference
-  ref_name <- subset(reference_table, Electrode == ei)[["Reference"]]
-  e$set_reference(ref_name)
-  e
-})
-names(electrode_instances) <- requested_electrodes
-```
-
-
-Start to load power. Here also create cache to the `RAVE` cache directory.
-
-```{rave load_and_cache_power, language = "R", export = "power"}
-power_list <- lapply(electrode_instances, function(e){
-  e$load_data("power")
-})
-target <- normalizePath(file.path("shared", "cache", "power"),
-                        mustWork = FALSE)
-  
-if(dir.exists(target)){
-  unlink(target, recursive = TRUE, force = TRUE)
-} else {
-  raveio::dir_create2(dirname(target))
-}
-power <- filearray::filearray_bind(
-  .list = power_list, symlink = TRUE, 
-  filebase = target)
-
-if(length(power_list)){
-  dnames <- dimnames(power_list[[1]])
-  dnames[[4]] <- as.integer(names(electrode_instances))
-  dimnames(power) <- dnames
-} else {
-  stop("No power data not loaded")
+```{rave load_electrodes, language = "R", export = "loading_elec"}
+loading_elec <- dipsaus::parse_svec(load_electrodes)
+loading_elec <- subject$electrodes[subject$electrodes %in% loading_elec]
+if(!length(loading_elec)) {
+  stop("No valid electrode to load!")
 }
 ```
 
-#### Step 4: Baseline correction
+Start to load voltage. Here also create cache to the `RAVE` cache directory.
 
-```{rave calculate_baseline, language = "R", export = "baseline_data"}
-dim <- dim(power)
-dim[length(dim)] <- 1
-plen <- prod(dim)
-target <- file.path(electrode_instances[[1]]$cache_root, "..")
-raveio::dir_create2(target)
-target <- normalizePath(target, mustWork = TRUE)
-target <- file.path(target, "_baseline")
-if(dir.exists(target)){
-  output <- filearray::filearray_load(target, "readwrite")
-  if(!all(dim(output) == dim(power))){
-    output$delete()
+```{rave load_voltage, language = "R", export = "repository"}
+repository <- raveio::prepare_subject_voltage_with_epoch(
+  subject = subject,
+  electrodes = loading_elec,
+  epoch_name = epoch_name,
+  reference_name = reference_name,
+  time_windows = epoch_time_window
+)
+```
+
+#### Step 3: Find Adjacency Array
+
+```{rave find_adjacency, language = "R", export = "A"}
+A <- generate_adjacency_array(
+  repository = repository,
+  trial_num = trial_num,
+  t_window = t_window,
+  t_step = t_step,
+  nlambda = nlambda
+)
+```
+
+
+#### Step 4: Find Fragility Matrix
+
+```{rave find_fragility, language = "R", export = "f_info"}
+f_info <- generate_fragility_matrix(
+  A = A,
+  elec = repository$electrode_list,
+  ncores = 4
+)
+```
+
+#### Step 5: Visualize
+
+```{rave plot_fragility_map, language = "R", export = "plot_fragility_map_timestamp"}
+
+f_info$norm <- f_info$norm[as.character(loading_elec),]
+  elecsort <- sort(as.numeric(attr(f_info$norm, "dimnames")[[1]])) # electrode indices sorted by ascending number
+  fsort <- as.numeric(attr(sort(f_info$avg), "names")) # electrode indices sorted by descending fragility
+
+  # if (sort_fmap == 'Electrode (ascending)') {
+  #   elec_order <- elecsort
+  # } else if (sort_fmap == 'Electrode (descending)') {
+  #   elec_order <- rev(elecsort)
+  # } else if (sort_fmap == 'Fragility (ascending)') {
+  #   elec_order <- fsort
+  # } else if (sort_fmap == 'Fragility (descending)') {
+  #   elec_order <- rev(fsort)
+  # }
+
+  y <- rev(elecsort) # determine what order to display electrodes in
+
+  f_info$norm <- f_info$norm[as.character(y),]
+  x <- 1:dim(f_info$norm)[2]
+  m <- t(f_info$norm)
+
+  attr(m, 'xlab') = 'Time (s)'
+  attr(m, 'ylab') = 'Electrode'
+  attr(m, 'zlab') = 'Fragility'
+
+  tp <- repository$voltage$dimnames$Time
+
+  # for electrode label spacing on y axis
+  yi = seq_along(y)
+  if(length(y) > 10) {
+    .seq = seq(1, length(y), length.out=10)
+    y = y[.seq]
+    yi = .seq
   }
-  if(!identical(dimnames(output), dimnames(power))){
-    dimnames(output) <- dimnames(power)
-  }
-}
-if(!dir.exists(target)){
-  output <- filearray::filearray_create(
-    filebase = target,
-    dimension = dim(power),
-    type = "float",
-    partition_size = 1L
+
+  # map x axis from timewindows (x) to time (for mtext)
+  xtime <- round(seq(tp[1], tp[length(tp)], length.out = 9), digits = 2)
+  xi <- seq(1, length(x), length.out = 9)
+
+  # map seizure onset from time (from slider input) to timewindows (for abline)
+  secs <- seq(tp[1], tp[length(tp)])
+  onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset,secs)]
+
+  plot_fragility_map_timestamp <- Sys.time()
+  
+  ravebuiltins:::draw_many_heat_maps(list(
+    list(
+      data = m,
+      x = x,
+      y = seq_along(elecsort),
+      has_trials = TRUE,
+      range = 0:1
+    )
+  ), axes = c(FALSE,FALSE), PANEL.LAST = ravebuiltins:::add_decorator(function(...) {
+    abline(v = onset, lty = 2, lwd = 2)
+    mtext(y, side=2, line=-1, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
+    mtext(xtime, side=1, line=1, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
+  }, ravebuiltins:::spectrogram_heatmap_decorator())
   )
-}
-
-bl_range <- unlist(baseline)
-dnames <- dimnames(power)
-baseline_indexpoints <- which(
-  dnames$Time >= bl_range[[1]] & dnames$Time <= bl_range[[2]])
-
-filearray::fmap(power, function(input){
-  x <- input[[1]]
-  dim(x) <- dim
-  bl <- dipsaus::baseline_array(
-    x, along_dim = 2L,
-    baseline_indexpoints = baseline_indexpoints,
-    method = baseline_method
-  )
-  bl
-}, .y = output, .input_size = plen)
-
-baseline_data <- output
-```
-
-
-#### Step 5: Collapse baseline data
-
-```{rave collapse_by_trial_and_electrodes, language = "R", export = "collapsed"}
-
-dim <- dim(baseline_data)
-dim[length(dim)] <- 1
-plen <- prod(dim)
-collase_by_trial <- filearray::fmap2(baseline_data, function(input){
-  x <- input[[1]]
-  dim(x) <- dim
-  dipsaus::collapse(x, keep = c(2,1), average = TRUE)
-}, .input_size = plen, .simplify = TRUE)
-
-collapsed <- list(
-  collase_by_trial = collase_by_trial,
-  collase_by_trial_electrodes = dipsaus::collapse(
-    collase_by_trial, keep = c(1, 2), average = TRUE)
-)
-```
-
-```{r}
-brain <- threeBrain::freesurfer_brain2(
-  fs_subject_folder = subject$freesurfer_path, subject_name = subject$subject_code
-)
-brain$plot()
-```
-
-#### Step 6: Visualize
-
-```{rave plot_heatmap_collase_by_trial_electrodes, export = "collase_by_trial_timestamp", cue="always"}
-
-# Timestamp of when the plot is created
-collase_by_trial_timestamp <- Sys.time()
-
-# visualize
-dnames <- power$dimnames()
-
-image(
-  collapsed$collase_by_trial_electrodes,
-  y = dnames$Frequency,
-  ylab = "Frequency (Hz)",
-  x = dnames$Time, 
-  xlab = "Time (s)",
-  main = "Mean power across trial and electrodes"
-)
-
 ```
 
 ## Build, Visualize, & Run

@@ -1,14 +1,14 @@
-project_name: demo
-subject_code: DemoSubject
-epoch_name: auditory_onset
+project_name: OnsetZone
+subject_code: PT01
+epoch_name: seizure_onset
 epoch_time_window:
-- -1.0
-- 2.0
-reference_name: noref
-load_electrodes: 14-16
-analyze_electrodes: '14'
-t_window: 100.0
-t_step: 100.0
+- -10.0
+- 10.0
+reference_name: car
+load_electrodes: 1:24,26:36,42:43,46:54,56:70,72:95
+t_window: 250.0
+t_step: 125.0
 nlambda: 16.0
 ncores: .na
-trial_num: ~
+trial_num: 1.0
+sz_onset: 0.0
