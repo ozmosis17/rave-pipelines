@@ -6,6 +6,8 @@
 #'   - import packages that will be used via `library()`, or `targets::tar_option_set` (see below)
 NULL
 
+library(raveio)
+
 # Set pipeline options
 targets::tar_option_set(
 

@@ -54,15 +54,8 @@ rm(._._env_._.)
         }), deps = "settings"), load_subject = targets::tar_target_raw(name = "subject", 
         command = quote({
             .__target_expr__. <- quote({
-                library(raveio)
-                subject <- RAVESubject$new(project_name = project_name, 
+                subject <- raveio::RAVESubject$new(project_name = project_name, 
                   subject_code = subject_code, strict = TRUE)
-                print(subject)
-                subject$epoch_names
-                subject$reference_names
-                subject$blocks
-                subject$electrodes
-                all(subject$notch_filtered)
             })
             tryCatch({
                 eval(.__target_expr__.)
@@ -71,22 +64,15 @@ rm(._._env_._.)
                 asNamespace("raveio")$resolve_pipeline_error(name = "subject", 
                   condition = e, expr = .__target_expr__.)
             })
-        }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
+        }), format = asNamespace("raveio")$target_format_dynamic(name = "rave-subject", 
             target_export = "subject", target_expr = quote({
                 {
-                  library(raveio)
-                  subject <- RAVESubject$new(project_name = project_name, 
+                  subject <- raveio::RAVESubject$new(project_name = project_name, 
                     subject_code = subject_code, strict = TRUE)
-                  print(subject)
-                  subject$epoch_names
-                  subject$reference_names
-                  subject$blocks
-                  subject$electrodes
-                  all(subject$notch_filtered)
                 }
                 subject
             }), target_depends = c("project_name", "subject_code"
-            )), deps = c("project_name", "subject_code"), cue = targets::tar_cue("thorough"), 
+            )), deps = c("project_name", "subject_code"), cue = targets::tar_cue("always"), 
         pattern = NULL, iteration = "list"), load_electrodes = targets::tar_target_raw(name = "loading_elec", 
         command = quote({
             .__target_expr__. <- quote({
@@ -190,96 +176,4 @@ rm(._._env_._.)
                 f_info
             }), target_depends = c("A", "repository")), deps = c("A", 
         "repository"), cue = targets::tar_cue("thorough"), pattern = NULL, 
-        iteration = "list"), plot_fragility_map = targets::tar_target_raw(name = "plot_fragility_map_timestamp", 
-        command = quote({
-            .__target_expr__. <- quote({
-                f_info$norm <- f_info$norm[as.character(loading_elec), 
-                  ]
-                elecsort <- sort(as.numeric(attr(f_info$norm, 
-                  "dimnames")[[1]]))
-                fsort <- as.numeric(attr(sort(f_info$avg), "names"))
-                y <- rev(elecsort)
-                f_info$norm <- f_info$norm[as.character(y), ]
-                x <- 1:dim(f_info$norm)[2]
-                m <- t(f_info$norm)
-                attr(m, "xlab") = "Time (s)"
-                attr(m, "ylab") = "Electrode"
-                attr(m, "zlab") = "Fragility"
-                tp <- repository$voltage$dimnames$Time
-                yi = seq_along(y)
-                if (length(y) > 10) {
-                  .seq = seq(1, length(y), length.out = 10)
-                  y = y[.seq]
-                  yi = .seq
-                }
-                xtime <- round(seq(tp[1], tp[length(tp)], length.out = 9), 
-                  digits = 2)
-                xi <- seq(1, length(x), length.out = 9)
-                secs <- seq(tp[1], tp[length(tp)])
-                onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset, 
-                  secs)]
-                plot_fragility_map_timestamp <- Sys.time()
-                ravebuiltins:::draw_many_heat_maps(list(list(data = m, 
-                  x = x, y = seq_along(elecsort), has_trials = TRUE, 
-                  range = 0:1)), axes = c(FALSE, FALSE), PANEL.LAST = ravebuiltins:::add_decorator(function(...) {
-                  abline(v = onset, lty = 2, lwd = 2)
-                  mtext(y, side = 2, line = -1, at = yi, cex = (ravebuiltins:::rave_cex.lab * 
-                    0.8), las = 1)
-                  mtext(xtime, side = 1, line = 1, at = xi, cex = (ravebuiltins:::rave_cex.lab * 
-                    0.8), las = 1)
-                }, ravebuiltins:::spectrogram_heatmap_decorator()))
-            })
-            tryCatch({
-                eval(.__target_expr__.)
-                return(plot_fragility_map_timestamp)
-            }, error = function(e) {
-                asNamespace("raveio")$resolve_pipeline_error(name = "plot_fragility_map_timestamp", 
-                  condition = e, expr = .__target_expr__.)
-            })
-        }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
-            target_export = "plot_fragility_map_timestamp", target_expr = quote({
-                {
-                  f_info$norm <- f_info$norm[as.character(loading_elec), 
-                    ]
-                  elecsort <- sort(as.numeric(attr(f_info$norm, 
-                    "dimnames")[[1]]))
-                  fsort <- as.numeric(attr(sort(f_info$avg), 
-                    "names"))
-                  y <- rev(elecsort)
-                  f_info$norm <- f_info$norm[as.character(y), 
-                    ]
-                  x <- 1:dim(f_info$norm)[2]
-                  m <- t(f_info$norm)
-                  attr(m, "xlab") = "Time (s)"
-                  attr(m, "ylab") = "Electrode"
-                  attr(m, "zlab") = "Fragility"
-                  tp <- repository$voltage$dimnames$Time
-                  yi = seq_along(y)
-                  if (length(y) > 10) {
-                    .seq = seq(1, length(y), length.out = 10)
-                    y = y[.seq]
-                    yi = .seq
-                  }
-                  xtime <- round(seq(tp[1], tp[length(tp)], length.out = 9), 
-                    digits = 2)
-                  xi <- seq(1, length(x), length.out = 9)
-                  secs <- seq(tp[1], tp[length(tp)])
-                  onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset, 
-                    secs)]
-                  plot_fragility_map_timestamp <- Sys.time()
-                  ravebuiltins:::draw_many_heat_maps(list(list(data = m, 
-                    x = x, y = seq_along(elecsort), has_trials = TRUE, 
-                    range = 0:1)), axes = c(FALSE, FALSE), PANEL.LAST = ravebuiltins:::add_decorator(function(...) {
-                    abline(v = onset, lty = 2, lwd = 2)
-                    mtext(y, side = 2, line = -1, at = yi, cex = (ravebuiltins:::rave_cex.lab * 
-                      0.8), las = 1)
-                    mtext(xtime, side = 1, line = 1, at = xi, 
-                      cex = (ravebuiltins:::rave_cex.lab * 0.8), 
-                      las = 1)
-                  }, ravebuiltins:::spectrogram_heatmap_decorator()))
-                }
-                plot_fragility_map_timestamp
-            }), target_depends = c("f_info", "loading_elec", 
-            "repository", "sz_onset")), deps = c("f_info", "loading_elec", 
-        "repository", "sz_onset"), cue = targets::tar_cue("thorough"), 
-        pattern = NULL, iteration = "list"))
+        iteration = "list"))
