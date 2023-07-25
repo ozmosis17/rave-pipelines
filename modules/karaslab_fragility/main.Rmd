@@ -57,6 +57,13 @@ if(!length(loading_elec)) {
   stop("No valid electrode to load!")
 }
 ```
+```{rave display_electrodes, language = "R", export = "displayed_elec"}
+displayed_elec <- dipsaus::parse_svec(display_electrodes)
+displayed_elec <- subject$electrodes[subject$electrodes %in% displayed_elec]
+if(!length(displayed_elec)) {
+  stop("No valid electrode to load!")
+}
+```
 
 Start to load voltage. Here also create cache to the `RAVE` cache directory.
 
@@ -97,7 +104,7 @@ f_info <- generate_fragility_matrix(
 
 
 ```{r}
-fragility_map_timestamp_plot(repository, f_info, loading_elec, sz_onset)
+fragility_map_plot(repository, f_info, displayed_elec, sz_onset)
 ```
 
 ## Build, Visualize, & Run

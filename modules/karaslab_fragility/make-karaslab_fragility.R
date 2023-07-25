@@ -24,6 +24,9 @@ rm(._._env_._.)
         }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
         quote({
             settings[["load_electrodes"]]
+        }), deps = "settings"), input_display_electrodes = targets::tar_target_raw("display_electrodes", 
+        quote({
+            settings[["display_electrodes"]]
         }), deps = "settings"), input_t_window = targets::tar_target_raw("t_window", 
         quote({
             settings[["t_window"]]
@@ -103,6 +106,36 @@ rm(._._env_._.)
                 loading_elec
             }), target_depends = c("load_electrodes", "subject"
             )), deps = c("load_electrodes", "subject"), cue = targets::tar_cue("thorough"), 
+        pattern = NULL, iteration = "list"), display_electrodes = targets::tar_target_raw(name = "displayed_elec", 
+        command = quote({
+            .__target_expr__. <- quote({
+                displayed_elec <- dipsaus::parse_svec(display_electrodes)
+                displayed_elec <- subject$electrodes[subject$electrodes %in% 
+                  displayed_elec]
+                if (!length(displayed_elec)) {
+                  stop("No valid electrode to load!")
+                }
+            })
+            tryCatch({
+                eval(.__target_expr__.)
+                return(displayed_elec)
+            }, error = function(e) {
+                asNamespace("raveio")$resolve_pipeline_error(name = "displayed_elec", 
+                  condition = e, expr = .__target_expr__.)
+            })
+        }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
+            target_export = "displayed_elec", target_expr = quote({
+                {
+                  displayed_elec <- dipsaus::parse_svec(display_electrodes)
+                  displayed_elec <- subject$electrodes[subject$electrodes %in% 
+                    displayed_elec]
+                  if (!length(displayed_elec)) {
+                    stop("No valid electrode to load!")
+                  }
+                }
+                displayed_elec
+            }), target_depends = c("display_electrodes", "subject"
+            )), deps = c("display_electrodes", "subject"), cue = targets::tar_cue("thorough"), 
         pattern = NULL, iteration = "list"), load_voltage = targets::tar_target_raw(name = "repository", 
         command = quote({
             .__target_expr__. <- quote({

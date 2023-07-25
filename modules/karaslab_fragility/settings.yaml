@@ -1,14 +1,15 @@
-project_name: OnsetZone
-subject_code: PT01
-epoch_name: seizure_onset
+sz_onset: 0.0
+project_name: FragilityEEGDataset
+nlambda: 16.0
+subject_code: jh103
+reference_name: car
 epoch_time_window:
 - -10.0
 - 10.0
-reference_name: car
-load_electrodes: 1:24,26:36,42:43,46:54,56:70,72:95
-t_window: 250.0
-t_step: 125.0
-nlambda: 16.0
+t_step: 500.0
+epoch_name: seizure_onset
+t_window: 1000.0
+display_electrodes: 1:2,15:21,25:33,75:78,86,94
+load_electrodes: 1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110
 ncores: .na
 trial_num: 1.0
-sz_onset: 0.0

@@ -7,6 +7,7 @@
 NULL
 
 library(raveio)
+library(ggplot2)
 
 # Set pipeline options
 targets::tar_option_set(
