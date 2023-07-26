@@ -170,16 +170,8 @@ generate_fragility_matrix <- function(A, elec, lim = 1i, ncores) {
     Step = seq_len(J)
   )
 
-  # # scale fragility values from 0 to 1 with 1 being most fragile
-  # for (j in 1:J) {
-  #   max_f <- max(f_vals[,j])
-  #   f_norm[,j] <- sapply(f_vals[,j], function(x) (max_f - x) / max_f)
-  # }
-
   # scale fragility values from -1 to 1 with 1 being most fragile
 
-  # max_f <- max(f_vals)
-  # min_f <- min(f_vals)
   # normalize, for each column (margin=2L)
   f_norm <- apply(f_vals, 2, function(f_col) {
     max_f <- max(f_col)

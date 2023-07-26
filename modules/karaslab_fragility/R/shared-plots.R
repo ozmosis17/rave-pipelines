@@ -1,4 +1,4 @@
-fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, sort_fmap = 1, height = 10) {
+fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, elec_list, sort_fmap = 1, height = 10) {
 
   m <- f_info$norm[as.character(displayed_elec),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
@@ -23,6 +23,13 @@ fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, sor
   attr(m, 'zlab') = 'Fragility'
 
   tp <- repository$voltage$dimnames$Time
+
+  if (!all(elec_list$Label == 'NoLabel')) {
+    elec_i <- match(elec_order, elec_list$Electrode)
+    y <- paste0(elec_list$Label[elec_i], '(', elec_order, ')')
+    elec_i <- match(fsort, elec_list$Electrode)
+    f_list <- paste0(elec_list$Label[elec_i], '(', fsort, ')')
+  }
 
   # for electrode label spacing on y axis
   yi = seq_along(y)
@@ -51,8 +58,8 @@ fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, sor
     )
   ), axes = c(FALSE,FALSE), PANEL.LAST = ravebuiltins:::add_decorator(function(...) {
     abline(v = onset, lty = 2, lwd = 2)
-    mtext(y, side=2, line=-1, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
-    mtext(xtime, side=1, line=1, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.8), las=1)
+    mtext(y, side=2, line=-1.5, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
+    mtext(xtime, side=1, line=0, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
   }, ravebuiltins:::spectrogram_heatmap_decorator())
   )
 }
@@ -153,12 +160,6 @@ voltage_recon_plot <- function(repository, A, t_window, t_step, trial_num, timep
   y2 <- v_reconstructed[timepoints,elec_num]
   df <- data.frame(timepoints,y1,y2)
 
-  g <- ggplot(df, aes(timepoints)) +
-    geom_line(aes(y=y1, color = "original")) +
-    geom_line(aes(y=y2, color = "reconstructed")) +
-    labs(x = "Time (ms)", y = paste0("Voltage - Electrode ", elec_num), color = "Legend") +
-    scale_color_manual(values = c("original" = 'black', "reconstructed" = "red"))
-
   # check stability of adjacency matrix
   eigv <- abs(eigen(A[,,1], only.values = TRUE)$values)
   print(paste0('largest eigenvalue norm: ', max(eigv)))
@@ -166,6 +167,14 @@ voltage_recon_plot <- function(repository, A, t_window, t_step, trial_num, timep
   # calculate mean squared error between y1 and y2
   mse <- mean((v_orig[] - v_reconstructed[])^2)
   print(paste0('MSE: ', mse))
+
+  g <- ggplot(df, aes(timepoints)) +
+    geom_line(aes(y=y1, color = "original")) +
+    geom_line(aes(y=y2, color = "reconstructed")) +
+    labs(x = "Time (ms)", y = paste0("Voltage - Electrode ", elec_num), color = "Legend") +
+    scale_color_manual(values = c("original" = 'black', "reconstructed" = "red")) +
+    ggtitle(paste0("Mean Squared Error: ", format(mse, scientific = TRUE)))
+
   g
 }
 
