@@ -3,14 +3,12 @@ project <- "FragilityEEGDataset"
 electrodes <- c(1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110)
 #display <- electrodes
 display <- c(1:2,15:21,25:33,75:78,86,94)
-subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
 subject_code <- "pt01"
 project <- "FragilityEEGDataset"
 electrodes <- c(1:4,7:24,26:36,42:43,46:54,56:70,72:95)
 #display <- electrodes
 display <- c(33,34,62:69,88:91)
-subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
 # Import subject_code from BIDS and preprocess ----------------------------------------------
 
@@ -33,8 +31,8 @@ import_bids <- pipeline_container$add_pipeline(
         BIDS_runs = c(
           paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-01"),
           paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-02"),
-          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-03")
-          #paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-04")
+          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-03"),
+          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-04")
         ),
         BIDS_sessions = NULL
       )
@@ -62,8 +60,8 @@ pipeline_container$add_pipeline(
           # Now I can import just like normal RAVE subject
           "presurgery_ictal_ecog_01",
           "presurgery_ictal_ecog_02",
-          "presurgery_ictal_ecog_03"
-          # "presurgery_ictal_ecog_04"
+          "presurgery_ictal_ecog_03",
+          "presurgery_ictal_ecog_04"
         ),
 
         # names(raveio::IMPORT_FORMATS)[c(1:5,7)]
@@ -94,6 +92,9 @@ pipeline_container$build_pipelines()
 
 pipeline_container$run()
 
+subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
+
+# run notch filter @ 60, 120, 180 Hz
 notch_pipeline <- raveio::pipeline("notch_filter")
 notch_pipeline$set_settings(
   project_name = project,
@@ -106,11 +107,13 @@ notch_pipeline$run('apply_notch')
 # generate epoch
 epoch_table <- data.frame(
   Block = subject$blocks,
-  Time = c("59.892",
-           "59.892",
-           "59.892"),
+  Time = c("75.95",
+           "93",
+           "108.81",
+           "127.72"),
   Trial = seq_len(length(subject$blocks)),
   Condition = c("SZ EVENT # (PB SZ)",
+                "SZ EVENT # (PB SZ)",
                 "SZ EVENT # (PB SZ)",
                 "SZ EVENT # (PB SZ)"),
   Duration = rep(NA,length(subject$blocks))
@@ -203,9 +206,11 @@ do.call(voltage_recon_plot, vplot_data)
 # for plotting fragility map ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
+subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
 fplot_data <- c(fragility_pipeline$run(c("repository", "f_info", "displayed_elec", "sz_onset")),
                 list(elec_list = subject$get_electrode_table(), 'sort_fmap' = 1, 'height' = 14))
+
 do.call(fragility_map_plot, fplot_data)
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
