@@ -192,54 +192,92 @@ fragility_pipeline$set_settings(
   trial_num = 1,
   t_window = 250,
   t_step = 125,
-  nlambda = 16,
-  ncores = NA
+  lambda = 0.001,
+  ncores = NA,
+  signalScaling = 1000000,
+  sz_onset = 0
 )
 
-# for voltage reconstruction ----------------------------------------------
-# env <- fragility_pipeline$load_shared()
-source("./modules/karaslab_fragility/R/shared-plots.R")
-vplot_data <- c(fragility_pipeline$run(c("repository", "A", "t_window", "t_step", "trial_num")),
-                list('timepoints' = 1:250),
-                'elec_num' = 1)
-do.call(voltage_recon_plot, vplot_data)
-# for plotting fragility map ---------------------------------------
+# display image results ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
 subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
-fplot_data <- c(fragility_pipeline$run(c("repository", "f_info", "displayed_elec", "sz_onset")),
-                list(elec_list = subject$get_electrode_table(), 'sort_fmap' = 1, 'height' = 14))
+results <- c(fragility_pipeline$run(c("repository", "adj_frag_info")))
 
-do.call(fragility_map_plot, fplot_data)
+# voltage reconstruction
+do.call(voltage_recon_plot, c(results,
+                              list(fragility_pipeline$get_settings()$t_window,
+                                   fragility_pipeline$get_settings()$t_step,
+                                   fragility_pipeline$get_settings()$trial_num,
+                                   fragility_pipeline$get_settings()$signalScaling,
+                                   fragility_pipeline$get_settings()$lambda,
+                                   timepoints = 1:1000,
+                                   elec_num = 1)
+                              ))
+
+# fragility map
+do.call(fragility_map_plot, c(results,
+                              list(fragility_pipeline$get_settings()$display_electrodes,
+                                   fragility_pipeline$get_settings()$sz_onset,
+                                   elec_list = subject$get_electrode_table(),
+                                   'sort_fmap' = 1,
+                                   'height' = 14)
+                              ))
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
 
-subject <- fragility_pipeline$run("subject")
-#export_path <- file.path(subject$note_path, "karaslab_fragility")
-export_path <- file.path("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Fragility 2.0 Project/FragilityEEGDataset/")
+subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
+
+export_path <- file.path(subject$note_path, "karaslab_fragility")
+#export_path <- file.path("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Fragility 2.0 Project/FragilityEEGDataset/")
 raveio::dir_create2(export_path)
 
-fplot_data <- c(fragility_pipeline$run(c("repository", "f_info", "displayed_elec", "sz_onset")),
-                list(elec_list = subject$get_electrode_table(), 'sort_fmap' = 1, 'height' = 14))
-
-vplot_data <- c(fragility_pipeline$run(c("repository", "A", "t_window", "t_step", "trial_num")),
-                list('timepoints' = 1:500),
-                'elec_num' = 1)
+results <- c(fragility_pipeline$run(c("repository", "adj_frag_info")))
 
 pdf_path <- file.path(export_path, paste0(subject$subject_code,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
 grDevices::pdf(pdf_path, width = 12, height = 7)
 par(mfrow=c(2,1),mar=rep(2,4))
-do.call(fragility_map_plot, fplot_data)
-do.call(voltage_recon_plot, vplot_data)
+do.call(voltage_recon_plot, c(results,
+                              list(fragility_pipeline$get_settings()$t_window,
+                                   fragility_pipeline$get_settings()$t_step,
+                                   fragility_pipeline$get_settings()$trial_num,
+                                   fragility_pipeline$get_settings()$signalScaling,
+                                   fragility_pipeline$get_settings()$lambda,
+                                   timepoints = 1:1000,
+                                   elec_num = 1)
+))
+do.call(fragility_map_plot, c(results,
+                              list(fragility_pipeline$get_settings()$display_electrodes,
+                                   fragility_pipeline$get_settings()$sz_onset,
+                                   elec_list = subject$get_electrode_table(),
+                                   'sort_fmap' = 1,
+                                   'height' = 14)
+))
 grDevices::dev.off()
 
 # export_pdf(
 #   {
 #     par(mfrow=c(2,1),mar=rep(2,4))
-#     do.call(fragility_map_plot, fplot_data)
-#     do.call(voltage_recon_plot, vplot_data)
+#
+#     do.call(voltage_recon_plot, c(results,
+#                                   list(fragility_pipeline$get_settings()$t_window,
+#                                        fragility_pipeline$get_settings()$t_step,
+#                                        fragility_pipeline$get_settings()$trial_num,
+#                                        fragility_pipeline$get_settings()$signalScaling,
+#                                        timepoints = 1:fragility_pipeline$get_settings()$t_window,
+#                                        elec_num = 1)
+#     ))
+#
+#     do.call(fragility_map_plot, c(results,
+#                                   list(fragility_pipeline$get_settings()$display_electrodes,
+#                                        fragility_pipeline$get_settings()$sz_onset,
+#                                        elec_list = subject$get_electrode_table(),
+#                                        'sort_fmap' = 1,
+#                                        'height' = 14)
+#     ))
+#
 #   },
 #   path = pdf_path
 # )

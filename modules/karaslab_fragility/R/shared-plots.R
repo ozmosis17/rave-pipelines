@@ -1,8 +1,8 @@
-fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, elec_list, sort_fmap = 1, height = 10) {
+fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10) {
 
-  m <- f_info$norm[as.character(displayed_elec),]
+  m <- adj_frag_info$frag[as.character(display_electrodes),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
-  fsort <- as.numeric(attr(sort(f_info$avg), "names")) # electrode indices sorted by descending fragility
+  fsort <- as.numeric(attr(sort(adj_frag_info$avg), "names")) # electrode indices sorted by descending fragility
 
   if (sort_fmap == 1) {
     elec_order <- elecsort # by electrode (ascending)
@@ -64,8 +64,9 @@ fragility_map_plot <- function(repository, f_info, displayed_elec, sz_onset, ele
   )
 }
 
-voltage_recon_plot <- function(repository, A, t_window, t_step, trial_num, timepoints = 1:200, elec_num = 1) {
+voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, trial_num, signalScaling, lambda, timepoints = 1:200, elec_num = 1) {
 
+  A <- adj_frag_info$adj
   S <- length(repository$voltage$dimnames$Time) # S is total number of timepoints
   N <- length(repository$voltage$dimnames$Electrode) # N is number of electrodes
 
@@ -91,7 +92,7 @@ voltage_recon_plot <- function(repository, A, t_window, t_step, trial_num, timep
     e <- dimnames(v)$Electrode
     idx_e <- which(repository$electrode_list == e)
 
-    v_orig[,idx_e] <- v[1:S, trial_num, 1, drop = TRUE]
+    v_orig[,idx_e] <- v[1:S, trial_num, 1, drop = TRUE]/signalScaling
     return()
   })
 
@@ -173,7 +174,7 @@ voltage_recon_plot <- function(repository, A, t_window, t_step, trial_num, timep
     geom_line(aes(y=y2, color = "reconstructed")) +
     labs(x = "Time (ms)", y = paste0("Voltage - Electrode ", elec_num), color = "Legend") +
     scale_color_manual(values = c("original" = 'black', "reconstructed" = "red")) +
-    ggtitle(paste0("Mean Squared Error: ", format(mse, scientific = TRUE)))
+    ggtitle(paste0("Mean Squared Error: ", format(mse, scientific = TRUE), ", lambda = ", lambda))
 
   g
 }

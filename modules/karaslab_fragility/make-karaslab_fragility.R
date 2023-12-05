@@ -16,44 +16,50 @@ rm(._._env_._.)
     quote({
         yaml::read_yaml(settings_path)
     }), deps = "settings_path", cue = targets::tar_cue("always")), 
-    input_trial_num = targets::tar_target_raw("trial_num", quote({
-        settings[["trial_num"]]
-    }), deps = "settings"), input_ncores = targets::tar_target_raw("ncores", 
+    input_lambda = targets::tar_target_raw("lambda", quote({
+        settings[["lambda"]]
+    }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
         quote({
-            settings[["ncores"]]
-        }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
-        quote({
-            settings[["load_electrodes"]]
-        }), deps = "settings"), input_display_electrodes = targets::tar_target_raw("display_electrodes", 
-        quote({
-            settings[["display_electrodes"]]
-        }), deps = "settings"), input_t_window = targets::tar_target_raw("t_window", 
-        quote({
-            settings[["t_window"]]
-        }), deps = "settings"), input_epoch_name = targets::tar_target_raw("epoch_name", 
-        quote({
-            settings[["epoch_name"]]
-        }), deps = "settings"), input_t_step = targets::tar_target_raw("t_step", 
-        quote({
-            settings[["t_step"]]
-        }), deps = "settings"), input_epoch_time_window = targets::tar_target_raw("epoch_time_window", 
-        quote({
-            settings[["epoch_time_window"]]
-        }), deps = "settings"), input_reference_name = targets::tar_target_raw("reference_name", 
-        quote({
-            settings[["reference_name"]]
-        }), deps = "settings"), input_subject_code = targets::tar_target_raw("subject_code", 
-        quote({
-            settings[["subject_code"]]
-        }), deps = "settings"), input_nlambda = targets::tar_target_raw("nlambda", 
-        quote({
-            settings[["nlambda"]]
+            settings[["sz_onset"]]
         }), deps = "settings"), input_project_name = targets::tar_target_raw("project_name", 
         quote({
             settings[["project_name"]]
-        }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
+        }), deps = "settings"), input_nlambda = targets::tar_target_raw("nlambda", 
         quote({
-            settings[["sz_onset"]]
+            settings[["nlambda"]]
+        }), deps = "settings"), input_subject_code = targets::tar_target_raw("subject_code", 
+        quote({
+            settings[["subject_code"]]
+        }), deps = "settings"), input_reference_name = targets::tar_target_raw("reference_name", 
+        quote({
+            settings[["reference_name"]]
+        }), deps = "settings"), input_epoch_time_window = targets::tar_target_raw("epoch_time_window", 
+        quote({
+            settings[["epoch_time_window"]]
+        }), deps = "settings"), input_t_step = targets::tar_target_raw("t_step", 
+        quote({
+            settings[["t_step"]]
+        }), deps = "settings"), input_epoch_name = targets::tar_target_raw("epoch_name", 
+        quote({
+            settings[["epoch_name"]]
+        }), deps = "settings"), input_t_window = targets::tar_target_raw("t_window", 
+        quote({
+            settings[["t_window"]]
+        }), deps = "settings"), input_display_electrodes = targets::tar_target_raw("display_electrodes", 
+        quote({
+            settings[["display_electrodes"]]
+        }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
+        quote({
+            settings[["load_electrodes"]]
+        }), deps = "settings"), input_ncores = targets::tar_target_raw("ncores", 
+        quote({
+            settings[["ncores"]]
+        }), deps = "settings"), input_trial_num = targets::tar_target_raw("trial_num", 
+        quote({
+            settings[["trial_num"]]
+        }), deps = "settings"), input_signalScaling = targets::tar_target_raw("signalScaling", 
+        quote({
+            settings[["signalScaling"]]
         }), deps = "settings"), load_subject = targets::tar_target_raw(name = "subject", 
         command = quote({
             .__target_expr__. <- quote({
@@ -162,51 +168,30 @@ rm(._._env_._.)
             "epoch_name", "reference_name", "epoch_time_window"
             )), deps = c("subject", "loading_elec", "epoch_name", 
         "reference_name", "epoch_time_window"), cue = targets::tar_cue("thorough"), 
-        pattern = NULL, iteration = "list"), find_adjacency = targets::tar_target_raw(name = "A", 
+        pattern = NULL, iteration = "list"), find_adj_and_frag = targets::tar_target_raw(name = "adj_frag_info", 
         command = quote({
             .__target_expr__. <- quote({
-                A <- generate_adjacency_array(repository = repository, 
+                adj_frag_info <- calc_adj_frag(repository = repository, 
                   trial_num = trial_num, t_window = t_window, 
-                  t_step = t_step, nlambda = nlambda)
+                  t_step = t_step, lambda = lambda, signalScaling = signalScaling)
             })
             tryCatch({
                 eval(.__target_expr__.)
-                return(A)
+                return(adj_frag_info)
             }, error = function(e) {
-                asNamespace("raveio")$resolve_pipeline_error(name = "A", 
+                asNamespace("raveio")$resolve_pipeline_error(name = "adj_frag_info", 
                   condition = e, expr = .__target_expr__.)
             })
         }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
-            target_export = "A", target_expr = quote({
+            target_export = "adj_frag_info", target_expr = quote({
                 {
-                  A <- generate_adjacency_array(repository = repository, 
+                  adj_frag_info <- calc_adj_frag(repository = repository, 
                     trial_num = trial_num, t_window = t_window, 
-                    t_step = t_step, nlambda = nlambda)
+                    t_step = t_step, lambda = lambda, signalScaling = signalScaling)
                 }
-                A
+                adj_frag_info
             }), target_depends = c("repository", "trial_num", 
-            "t_window", "t_step", "nlambda")), deps = c("repository", 
-        "trial_num", "t_window", "t_step", "nlambda"), cue = targets::tar_cue("thorough"), 
-        pattern = NULL, iteration = "list"), find_fragility = targets::tar_target_raw(name = "f_info", 
-        command = quote({
-            .__target_expr__. <- quote({
-                f_info <- generate_fragility_matrix(A = A, elec = repository$electrode_list, 
-                  ncores = 4)
-            })
-            tryCatch({
-                eval(.__target_expr__.)
-                return(f_info)
-            }, error = function(e) {
-                asNamespace("raveio")$resolve_pipeline_error(name = "f_info", 
-                  condition = e, expr = .__target_expr__.)
-            })
-        }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
-            target_export = "f_info", target_expr = quote({
-                {
-                  f_info <- generate_fragility_matrix(A = A, 
-                    elec = repository$electrode_list, ncores = 4)
-                }
-                f_info
-            }), target_depends = c("A", "repository")), deps = c("A", 
-        "repository"), cue = targets::tar_cue("thorough"), pattern = NULL, 
-        iteration = "list"))
+            "t_window", "t_step", "lambda", "signalScaling")), 
+        deps = c("repository", "trial_num", "t_window", "t_step", 
+        "lambda", "signalScaling"), cue = targets::tar_cue("thorough"), 
+        pattern = NULL, iteration = "list"))
