@@ -22,6 +22,8 @@ loader_html <- function(session = shiny::getDefaultReactiveDomain()){
           )
         ),
 
+        # shiny::numericInput(inputId = ns('junk'), "My input", value = 9),
+
         loader_epoch$ui_func(),
 
         ravedash::flex_group_box(
@@ -82,17 +84,23 @@ loader_server <- function(input, output, session, ...){
       # TODO: add your own input values to the settings file
 
       # Save the variables into pipeline settings file
-      pipeline$set_settings(.list = settings)
+      pipeline$set_settings(
+        project_name = settings$project_name,
+        subject_code = settings$subject_code,
+        epoch_name = settings$epoch_choice,
+        epoch_time_window = c(
+          settings$epoch_choice__trial_starts,
+          settings$epoch_choice__trial_ends
+        ),
+        reference_name = settings$reference_name,
+        load_electrodes = settings$loaded_electrodes
+      )
 
       # Check if user has asked to set the epoch & reference to be the default
       default_epoch <- isTRUE(loader_epoch$get_sub_element_input("default"))
       default_reference <- isTRUE(loader_epoch$get_sub_element_input("default"))
 
       # --------------------- Run the pipeline! ---------------------
-
-      # Calculate the progress bar
-      tarnames <- pipeline$target_table$Names
-      count <- length(tarnames) + length(dipsaus::parse_svec(loader_electrodes$current_value)) + 4
 
       # Pop up alert to prevent user from making any changes (auto_close=FALSE)
       # This requires manually closing the alert window
@@ -104,67 +112,46 @@ loader_server <- function(input, output, session, ...){
       )
 
       # Run the pipeline target `repository`
-      # Use `as_promise=TRUE` to make result as a promise
-      res <- pipeline$run(
-        as_promise = TRUE,
-        names = "repository",
-        scheduler = "none",
-        type = "smart",  # parallel
-        # async = TRUE,
-        callr_function = NULL,
-        progress_quiet = TRUE
-      )
-
-      # The `res` contains a promise that might not have finished yet,
-      # so register functions to run when the promise is resolved
-      res$promise$then(
-
-        # When data can be imported
-        onFulfilled = function(e){
-
-          # Set epoch and/or reference as default
-          if(default_epoch || default_reference){
-            repo <- pipeline$read("repository")
-            if(default_epoch){
-              repo$subject$set_default("epoch_name", repo$epoch_name)
-            }
-            if(default_reference) {
-              repo$subject$set_default("reference_name", repo$reference_name)
-            }
+      tryCatch({
+        repo <- pipeline$run(names = "repository")
+        # Set epoch and/or reference as default
+        if(default_epoch || default_reference){
+          if(default_epoch){
+            repo$subject$set_default("epoch_name", repo$epoch_name)
           }
-
-          # Let the module know the data has been changed
-          ravedash::fire_rave_event('data_changed', Sys.time())
-          ravedash::logger("Data has been loaded loaded")
-
-          # Close the alert
-          dipsaus::close_alert2()
-        },
-
-
-        # this is what should happen when pipeline fails
-        onRejected = function(e){
-
-          # Close the alert
-          dipsaus::close_alert2()
-
-          # Immediately open a new alert showing the error messages
-          dipsaus::shiny_alert2(
-            title = "Errors",
-            text = paste(
-              "Found an error while loading the power data:\n\n",
-              paste(e$message, collapse = "\n")
-            ),
-            icon = "error",
-            danger_mode = TRUE,
-            auto_close = FALSE
-          )
+          if(default_reference) {
+            repo$subject$set_default("reference_name", repo$reference_name)
+          }
         }
-      )
+
+        # Let the module know the data has been changed
+        ravedash::fire_rave_event('data_changed', Sys.time())
+        ravedash::logger("Data has been loaded")
+
+        # Close the alert
+        Sys.sleep(0.5)
+        dipsaus::close_alert2()
+      }, error = function(e) {
+        # Close the alert
+        Sys.sleep(0.5)
+        dipsaus::close_alert2()
+
+        # Immediately open a new alert showing the error messages
+        dipsaus::shiny_alert2(
+          title = "Errors",
+          text = paste(
+            "Found an error while loading the voltage data:\n\n",
+            paste(e$message, collapse = "\n")
+          ),
+          icon = "error",
+          danger_mode = TRUE,
+          auto_close = FALSE
+        )
+      })
+
     }),
     input$loader_ready_btn, ignoreNULL = TRUE, ignoreInit = TRUE
   )
-
 
 
 }

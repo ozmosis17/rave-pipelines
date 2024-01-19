@@ -18,15 +18,15 @@ rm(._._env_._.)
     }), deps = "settings_path", cue = targets::tar_cue("always")), 
     input_lambda = targets::tar_target_raw("lambda", quote({
         settings[["lambda"]]
-    }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
+    }), deps = "settings"), input_signalscaling = targets::tar_target_raw("signalscaling", 
+        quote({
+            settings[["signalscaling"]]
+        }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
         quote({
             settings[["sz_onset"]]
         }), deps = "settings"), input_project_name = targets::tar_target_raw("project_name", 
         quote({
             settings[["project_name"]]
-        }), deps = "settings"), input_nlambda = targets::tar_target_raw("nlambda", 
-        quote({
-            settings[["nlambda"]]
         }), deps = "settings"), input_subject_code = targets::tar_target_raw("subject_code", 
         quote({
             settings[["subject_code"]]
@@ -51,9 +51,6 @@ rm(._._env_._.)
         }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
         quote({
             settings[["load_electrodes"]]
-        }), deps = "settings"), input_ncores = targets::tar_target_raw("ncores", 
-        quote({
-            settings[["ncores"]]
         }), deps = "settings"), input_trial_num = targets::tar_target_raw("trial_num", 
         quote({
             settings[["trial_num"]]
@@ -173,7 +170,7 @@ rm(._._env_._.)
             .__target_expr__. <- quote({
                 adj_frag_info <- calc_adj_frag(repository = repository, 
                   trial_num = trial_num, t_window = t_window, 
-                  t_step = t_step, lambda = lambda, signalScaling = signalScaling)
+                  t_step = t_step, lambda = lambda)
             })
             tryCatch({
                 eval(.__target_expr__.)
@@ -187,11 +184,10 @@ rm(._._env_._.)
                 {
                   adj_frag_info <- calc_adj_frag(repository = repository, 
                     trial_num = trial_num, t_window = t_window, 
-                    t_step = t_step, lambda = lambda, signalScaling = signalScaling)
+                    t_step = t_step, lambda = lambda)
                 }
                 adj_frag_info
             }), target_depends = c("repository", "trial_num", 
-            "t_window", "t_step", "lambda", "signalScaling")), 
-        deps = c("repository", "trial_num", "t_window", "t_step", 
-        "lambda", "signalScaling"), cue = targets::tar_cue("thorough"), 
+            "t_window", "t_step", "lambda")), deps = c("repository", 
+        "trial_num", "t_window", "t_step", "lambda"), cue = targets::tar_cue("thorough"), 
         pattern = NULL, iteration = "list"))

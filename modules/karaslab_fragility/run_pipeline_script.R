@@ -1,16 +1,44 @@
-subject_code <- "jh103"
-project <- "FragilityEEGDataset"
-electrodes <- c(1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110)
-#display <- electrodes
-display <- c(1:2,15:21,25:33,75:78,86,94)
+ravedash::debug_modules(module_root = rstudioapi::getActiveProject())
 
-subject_code <- "pt01"
-project <- "FragilityEEGDataset"
-electrodes <- c(1:4,7:24,26:36,42:43,46:54,56:70,72:95)
-#display <- electrodes
-display <- c(33,34,62:69,88:91)
+pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 
-# Import subject_code from BIDS and preprocess ----------------------------------------------
+# subject_code <- "jh103"
+# project <- "FragilityEEGDataset"
+# electrodes <- c(1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110)
+# #display <- electrodes
+# display <- c(1:2,15:21,25:33,75:78,86,94)
+# ictal_runs <- 1:3
+# type <- "ecog"
+# import_format <- names(raveio::IMPORT_FORMATS)[4]
+# sample_rate <- 1000
+#
+# subject_code <- "pt01"
+# project <- "FragilityEEGDataset"
+# electrodes <- c(1:4,7:24,26:36,42:43,46:54,56:70,72:95)
+# #display <- electrodes
+# display <- c(33,34,62:69,88:91)
+#
+# ictal_runs <- 1:4
+# sample_rate <- 1000
+# type <- "ecog"
+# import_format <- names(raveio::IMPORT_FORMATS)[4]
+
+#HUP dataset
+HUP_i <- 5
+library(readxl)
+library(stringr)
+HUPxls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/HUPDataset/participantsHUP121923.xlsx")
+subject_code <- stringr::str_sub(HUPxls$participant_id[HUP_i], 4)
+project <- "HUPDataset"
+electrodes <- dipsaus::parse_svec(HUPxls$`good electrodes`[HUP_i])
+display <- electrodes
+
+ictal_runs <- seq_len(HUPxls$`ictal run`[HUP_i])
+sample_rate <- 512
+type <- tolower(HUPxls$implant[HUP_i])
+import_format <- names(raveio::IMPORT_FORMATS)[3]
+
+# Import subject from BIDS ----------------------------------------------
 
 pipeline_container <- raveio::pipeline_collection(tempfile(), overwrite = TRUE)
 
@@ -26,13 +54,10 @@ import_bids <- pipeline_container$add_pipeline(
         # Set Inputs Here
         overwrite = TRUE,
         # backup = FALSE,
-        BIDS_dataset = "FragilityEEGDataset",
+        BIDS_dataset = project,
         BIDS_subject = paste0("sub-",subject_code),
         BIDS_runs = c(
-          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-01"),
-          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-02"),
-          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-03"),
-          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-04")
+          paste0("ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-",type,"_run-0",ictal_runs)
         ),
         BIDS_sessions = NULL
       )
@@ -53,44 +78,65 @@ pipeline_container$add_pipeline(
         import_setup__subject_code = subject_code,
         import_setup__project_name = project,
         import_channels__unit = "NA",
-        import_channels__sample_rate = 1000,
+        import_channels__sample_rate = sample_rate,
         import_channels__electrodes = electrodes,
         # ses-presurgery_task-ictal_acq-ecog_run-01 -> presurgery_ictal_ecog_01
         import_blocks__session_block = c(
           # Now I can import just like normal RAVE subject
-          "presurgery_ictal_ecog_01",
-          "presurgery_ictal_ecog_02",
-          "presurgery_ictal_ecog_03",
-          "presurgery_ictal_ecog_04"
+          paste0("presurgery_ictal_",type,"_0",ictal_runs)
         ),
 
         # names(raveio::IMPORT_FORMATS)[c(1:5,7)]
-        import_blocks__format = "Single BrainVision file (.vhdr+.eeg, .vhdr+.dat) per block",
+        import_blocks__format = import_format,
         force_import = TRUE
       )
     )
   }
 )
 
+# Import subject from raw_data -----------------------
+
+# pipeline_container <- raveio::pipeline_collection(tempfile(), overwrite = TRUE)
+#
 # pipeline_container$add_pipeline(
-#   "notch_filter", deps = import_lfp$id, standalone = TRUE,
+#   "import_lfp_native", deps = import_bids$id, standalone = TRUE,
 #   pre_hook = function(inputs, ...) {
 #     dipsaus::list_to_fastmap2(
 #       map = inputs,
 #       list(
-#         project_name = project,
-#         subject_code = subject_code,
-#         notch_filter_lowerbound = c(59,118,178),
-#         notch_filter_upperbound = c(61,122,182)
+#         skip_validation = FALSE,
+#         import_setup__subject_code = subject_code,
+#         import_setup__project_name = project,
+#         import_channels__unit = "NA",
+#         import_channels__sample_rate = 1000,
+#         import_channels__electrodes = electrodes,
+#         # ses-presurgery_task-ictal_acq-ecog_run-01 -> presurgery_ictal_ecog_01
+#         import_blocks__session_block = c(
+#           # Now I can import just like normal RAVE subject
+#           "presurgery_ictal_ecog_01",
+#           "presurgery_ictal_ecog_02",
+#           "presurgery_ictal_ecog_03",
+#           "presurgery_ictal_ecog_04"
+#         ),
+#
+#         # names(raveio::IMPORT_FORMATS)[c(1:5,7)]
+#         import_blocks__format = "Single BrainVision file (.vhdr+.eeg, .vhdr+.dat) per block",
+#         force_import = TRUE
 #       )
 #     )
 #   }
 # )
 
+# Preprocess -------------
 # build to view the order of pipelines
 pipeline_container$build_pipelines()
 
-pipeline_container$run()
+# Workaround
+scheduler <- pipeline_container$get_scheduler()
+scheduler$set_settings(dry_run = FALSE, collection_root_path = "../../",
+                       error_action = "error")
+scheduler$eval(scheduler$target_table$Names)
+# pipeline_container$run()
 
 subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
@@ -107,15 +153,9 @@ notch_pipeline$run('apply_notch')
 # generate epoch
 epoch_table <- data.frame(
   Block = subject$blocks,
-  Time = c("75.95",
-           "93",
-           "108.81",
-           "127.72"),
+  Time = rep("120",length(subject$blocks)),
   Trial = seq_len(length(subject$blocks)),
-  Condition = c("SZ EVENT # (PB SZ)",
-                "SZ EVENT # (PB SZ)",
-                "SZ EVENT # (PB SZ)",
-                "SZ EVENT # (PB SZ)"),
+  Condition = rep("sz_onset",length(subject$blocks)),
   Duration = rep(NA,length(subject$blocks))
 )
 
@@ -165,7 +205,7 @@ raveio::safe_write_csv(
 # rave::start_rave2() # need to create reference.csv through rave UI
 
 # label electrodes using channels.tsv file
-channels <- read.delim(paste0("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/sub-",subject_code,"/ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-ecog_run-01_channels.tsv"))
+channels <- read.delim(paste0(raveio::rave_directories(subject_code, project, .force_format = "BIDS")$bids_subject_path,"/ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-",type,"_run-01_channels.tsv"))
 if ('name' %in% colnames(channels)){
   electrodes_table <- read.csv(paste0(subject$meta_path,'/electrodes.csv'))
   electrodes_table$Label <- channels$name[subject$electrodes]
@@ -190,16 +230,14 @@ fragility_pipeline$set_settings(
   load_electrodes = electrodes,
   display_electrodes = display,
   trial_num = 1,
-  t_window = 250,
-  t_step = 125,
-  lambda = 0.001,
-  ncores = NA,
-  signalScaling = 1000000,
-  sz_onset = 0
+  t_window = 500,
+  t_step = 250,
+  sz_onset = 0,
+  lambda = 0.0001
 )
 
 # display image results ---------------------------------------
-# env <- fragility_pipeline$load_shared()
+#env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
 subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
@@ -210,8 +248,6 @@ do.call(voltage_recon_plot, c(results,
                               list(fragility_pipeline$get_settings()$t_window,
                                    fragility_pipeline$get_settings()$t_step,
                                    fragility_pipeline$get_settings()$trial_num,
-                                   fragility_pipeline$get_settings()$signalScaling,
-                                   fragility_pipeline$get_settings()$lambda,
                                    timepoints = 1:1000,
                                    elec_num = 1)
                               ))
@@ -224,11 +260,16 @@ do.call(fragility_map_plot, c(results,
                                    'sort_fmap' = 1,
                                    'height' = 14)
                               ))
+
+t_start <- 0
+t_end <- 10
+threshold <- 0.5
+sz_onset_elec <- do.call(threshold_fragility, c(results, list(t_start, t_end, threshold)))
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
 
-subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
+#subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
 export_path <- file.path(subject$note_path, "karaslab_fragility")
 #export_path <- file.path("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Fragility 2.0 Project/FragilityEEGDataset/")
@@ -243,8 +284,6 @@ do.call(voltage_recon_plot, c(results,
                               list(fragility_pipeline$get_settings()$t_window,
                                    fragility_pipeline$get_settings()$t_step,
                                    fragility_pipeline$get_settings()$trial_num,
-                                   fragility_pipeline$get_settings()$signalScaling,
-                                   fragility_pipeline$get_settings()$lambda,
                                    timepoints = 1:1000,
                                    elec_num = 1)
 ))
@@ -282,8 +321,9 @@ grDevices::dev.off()
 #   path = pdf_path
 # )
 
-
-# TODO --------------------------------------------------------------------
-# clean up fragility plot function DONE
-# make plot function for reconstructed voltage visualization DONE
-# add function to calculate mean squared error for voltage reconstruction
+# debug
+# repository <- results$repository
+# adj_frag_info <- results$adj_frag_info
+# trial_num = 1
+# t_window = 250
+# t_step = 125

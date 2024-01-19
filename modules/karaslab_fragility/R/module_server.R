@@ -13,32 +13,63 @@ module_server <- function(input, output, session, ...){
   # get server tools to tweek
   server_tools <- get_default_handlers(session = session)
 
-  # Run analysis once the following input IDs are changed
-  # This is used by auto-recalculation feature
-  server_tools$run_analysis_onchange(
-    component_container$get_input_ids(c(
-      "electrode_text", "baseline_choices",
-      "analysis_ranges", "condition_groups"
-    ))
-  )
+  # # Run analysis once the following input IDs are changed
+  # # This is used by auto-recalculation feature
+  # server_tools$run_analysis_onchange(
+  #   component_container$get_input_ids(c(
+  #     "electrode_text", "baseline_choices",
+  #     "analysis_ranges", "condition_groups"
+  #   ))
+  # )
+
+  # run_fragility <- function() {
+  #   pipeline$set_settings(
+  #     display_electrodes = dipsaus::parse_svec(input$display_electrodes),
+  #     trial_num = input$trial_num,
+  #     t_window = input$t_window,
+  #     t_step = input$t_step
+  #     sz_onset = input$sz_onset
+  #   )
+  # }
 
   # Register event: main pipeline need to run
   shiny::bindEvent(
     ravedash::safe_observe({
 
-      # Invalidate previous results (stop them because they are no longer needed)
-      if(!is.null(local_data$results)) {
-        local_data$results$invalidate()
-        ravedash::logger("Invalidating previous run", level = "trace")
-      }
-
+      # # Invalidate previous results (stop them because they are no longer needed)
+      # if(!is.null(local_data$results)) {
+      #   local_data$results$invalidate()
+      #   ravedash::logger("Invalidating previous run", level = "trace")
+      # }
+      #
 
       # Collect input data
-      settings <- component_container$collect_settings(ids = c(
-        "electrode_text", "baseline_choices", "condition_groups", "analysis_ranges"
-      ))
+      # settings <- component_container$collect_settings(ids = c(
+      #   "display_electrodes", "trial_num", "t_window", "t_step", "sz_onset"
+      # ))
 
-      pipeline$set_settings(.list = settings)
+      trial_num <- which(input$trial_num == component_container$data$trial_choices)
+      t_step <- input$t_window * (as.numeric(input$t_step_percentage) / 100)
+
+      pipeline$set_settings(
+        display_electrodes = input$display_electrodes,
+        trial_num = trial_num,
+        t_window = input$t_window,
+        t_step = t_step,
+        sz_onset = input$sz_onset
+      )
+
+      print(trial_num)
+      print(input$t_window)
+      print(t_step)
+
+      # pipeline$set_settings(
+      #   display_electrodes = dipsaus::parse_svec(input$display_electrodes),
+      #   trial_num = input$trial_num,
+      #   t_window = input$t_window,
+      #   t_step = input$t_step
+      #   sz_onset = input$sz_onset
+      # )
 
       #' Run pipeline without blocking the main session
       #' The trick to speed up is to set
@@ -53,17 +84,15 @@ module_server <- function(input, output, session, ...){
       results <- pipeline$run(
         as_promise = TRUE,
         scheduler = "none",
-        type = "smart",
-        callr_function = NULL,
-        progress_title = "Calculating in progress",
-        async = TRUE,
-        check_interval = 0.1,
-        shortcut = TRUE,
+        # type = "smart",
+        # callr_function = NULL,
+        # progress_title = "Calculating in progress",
+        # async = TRUE,
+        # check_interval = 0.1,
+        # shortcut = TRUE,
         names = c(
-          "settings",
-          names(settings),
-          "requested_electrodes", "analysis_ranges_index", "cond_groups",
-          "bl_power", "collapsed_data"
+          "adj_frag_info"#,
+          # names(settings)
         )
       )
 
@@ -109,15 +138,17 @@ module_server <- function(input, output, session, ...){
       loaded_flag <- ravedash::watch_data_loaded()
       if(!loaded_flag){ return() }
       new_repository <- pipeline$read("repository")
-      if(!inherits(new_repository, "rave_prepare_power")){
-        ravedash::logger("Repository read from the pipeline, but it is not an instance of `rave_prepare_power`. Abort initialization", level = "warning")
+      print(new_repository)
+      print(class(new_repository))
+      if(!inherits(new_repository, "rave_prepare_subject_voltage_with_epoch")){
+        ravedash::logger("Repository read from the pipeline, but it is not an instance of `rave_prepare_subject_voltage_with_epoch`. Abort initialization", level = "warning")
         return()
       }
       ravedash::logger("Repository read from the pipeline; initializing the module UI", level = "debug")
 
       # check if the repository has the same subject as current one
       old_repository <- component_container$data$repository
-      if(inherits(old_repository, "rave_prepare_power")){
+      if(inherits(old_repository, "rave_prepare_subject_voltage_with_epoch")){
 
         if( !attr(loaded_flag, "force") &&
             identical(old_repository$signature, new_repository$signature) ){
@@ -126,15 +157,29 @@ module_server <- function(input, output, session, ...){
         }
       }
 
-      # TODO: reset UIs to default
 
       # Reset preset UI & data
       component_container$reset_data()
       component_container$data$repository <- new_repository
       component_container$initialize_with_new_data()
 
+      # construct initialization data that can be reused elsewhere
+      epoch_table <- new_repository$epoch_table
+      component_container$data$trial_choices <- sprintf("%s (%d)", epoch_table$Condition, epoch_table$Trial)
+
+      # TODO: reset UIs to default
+      # new_repository <- pipeline$read("repository")
+
+      # Update the trial selection input
+      shiny::updateSelectInput(
+        session = session,
+        inputId = "trial_num",
+        choices = component_container$data$trial_choices,
+        selected = component_container$data$trial_choices[pipeline$get_settings("trial_num")]
+      )
+
       # Reset outputs
-      shidashi::reset_output("collapse_over_trial")
+      # shidashi::reset_output("collapse_over_trial")
 
     }, priority = 1001),
     ravedash::watch_data_loaded(),
@@ -147,33 +192,65 @@ module_server <- function(input, output, session, ...){
 
 
   # Register outputs
-  output$collapse_over_trial <- shiny::renderPlot({
-    shiny::validate(
-      shiny::need(
-        length(local_reactives$update_outputs) &&
-          !isFALSE(local_reactives$update_outputs),
-        message = "Please run the module first"
+  ravedash::register_output(
+    outputId = "v_plot",
+    output_type = "image",
+    title = "Voltage Reconstruction",
+    shiny::renderPlot({
+      shiny::validate(
+        shiny::need(
+          length(local_reactives$update_outputs) &&
+            !isFALSE(local_reactives$update_outputs),
+          message = "Please run the module first"
+        )
       )
-    )
-    shiny::validate(
-      shiny::need(
+      shiny::validate(
+        shiny::need(
           isTRUE(local_data$results$valid),
-        message = "One or more errors while executing pipeline. Please check the notification."
+          message = "One or more errors while executing pipeline. Please check the notification."
+        )
       )
-    )
 
-    collapsed_data <- pipeline$read(var_names = "collapsed_data")
-    repository <- pipeline$read(var_names = "repository")
+      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-    time_points <- repository$time_points
-    frequencies <- repository$frequency
+      do.call(voltage_recon_plot, c(results,
+                                    list(pipeline$read()$t_window,
+                                         pipeline$read()$t_step,
+                                         pipeline$read()$trial_num,
+                                         timepoints = 1:1000,
+                                         elec_num = 1)
+      ))
+    })
+  )
 
-    data <- collapsed_data[[1]]$collasped$range_1
-    image(t(data$freq_time), x = time_points[data$cube_index$Time], y = frequencies[data$cube_index$Frequency])
+  ravedash::register_output(
+    outputId = "f_plot",
+    output_type = "image",
+    title = "Fragility Map",
+    shiny::renderPlot({
+      shiny::validate(
+        shiny::need(
+          length(local_reactives$update_outputs) &&
+            !isFALSE(local_reactives$update_outputs),
+          message = "Please run the module first"
+        )
+      )
+      shiny::validate(
+        shiny::need(
+          isTRUE(local_data$results$valid),
+          message = "One or more errors while executing pipeline. Please check the notification."
+        )
+      )
 
-  })
+      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-
-
-
+      do.call(fragility_map_plot, c(results,
+                                    list(pipeline$read()$display_electrodes,
+                                         pipeline$read()$sz_onset,
+                                         elec_list = pipeline$read()$subject$get_electrode_table(),
+                                         'sort_fmap' = 1,
+                                         'height' = 14)
+      ))
+    })
+  )
 }

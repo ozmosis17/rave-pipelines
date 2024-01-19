@@ -85,16 +85,8 @@ adj_frag_info <- calc_adj_frag(
   trial_num = trial_num,
   t_window = t_window,
   t_step = t_step,
-  lambda = lambda,
-  signalScaling = signalScaling
+  lambda = lambda
 )
-```
-
-#### Step 4: Visualize
-
-
-```{r}
-fragility_map_plot(repository, adj_frag_info, displayed_elec, sz_onset, elec_list = subject$get_electrode_table())
 ```
 
 ## Build, Visualize, & Run
