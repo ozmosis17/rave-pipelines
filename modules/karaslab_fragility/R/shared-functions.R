@@ -20,11 +20,11 @@ ridge <- function(xt, xtp1, lambda, intercept = FALSE, iw) {
   ## for each electrode
   for (i in seq_len(nel)) {
     y <- xtp1[, i]
-    fit <- glmnet(xt, y,
+    fit <- glmnet::glmnet(xt, y,
                   alpha = 0, lambda = lambda,
                   standardize = FALSE, intercept = intercept
     )
-    # fit <- cv.glmnet(xt, y,
+    # fit <- glmnet::cv.glmnet(xt, y,
     #               alpha = 0,
     #               standardize = FALSE, intercept = intercept
     # )
@@ -172,39 +172,42 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
   signalScaling <- 10^floor(log10(max(arr[])))
   arr[] <- arr[]/signalScaling
 
-  library(foreach)
-  library(doParallel)
-  registerDoParallel(parallel::detectCores())
-
   ## create adjacency array (array of adj matrices for each time window)
   ## iw: The index of the window we are going to calculate fragility
-  res <- foreach(iw = seq_len(n_steps),
-                 .combine = cbind,
-                 .packages = "glmnet")%dopar%{
-                   ## Sample indices for the selected window
-                   si <- seq_len(t_window-1) + (iw-1)*t_step
-                   ## measurements at time point t
-                   xt <- arr[si,]
-                   ## measurements at time point t plus 1
-                   xtp1 <- arr[si + 1,]
 
-                   ## Coefficient matrix A (adjacency matrix)
-                   ## each column is coefficients from a linear regression
-                   ## formula: xtp1 = xt*A + E
-                   Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+  res <- raveio::lapply_async(seq_len(n_steps), function(iw) {
+    ## Sample indices for the selected window
+    si <- seq_len(t_window-1) + (iw-1)*t_step
+    ## measurements at time point t
+    xt <- arr[si,]
+    ## measurements at time point t plus 1
+    xtp1 <- arr[si + 1,]
 
-                   R2 <- ridgeR2(xt,xtp1,Ai)
+    ## Coefficient matrix A (adjacency matrix)
+    ## each column is coefficients from a linear regression
+    ## formula: xtp1 = xt*A + E
+    Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
 
-                   return(list(Ai = Ai, R2 = R2))
-                 }
-  A <- unlist(res[seq(1,length(res),2)])
-  R2 <- unlist(res[seq(2,length(res),2)])
+    R2 <- ridgeR2(xt,xtp1,Ai)
+
+    return(list(Ai = Ai, R2 = R2))
+  }, callback = function(iw) {
+    sprintf("Running XXX|Step %s", iw)
+  })
+
+  A <- unlist(raveio::lapply_async(res, function(w){
+    w$Ai
+  }))
   dim(A) <- c(n_elec, n_elec, n_steps)
   dimnames(A) <- list(
     Electrode1 = repository$electrode_list,
     Electrode2 = repository$electrode_list,
     Step = seq_len(n_steps)
   )
+
+  R2 <- unlist(raveio::lapply_async(res, function(w){
+    w$R2
+  }))
   dim(R2) <- c(n_elec, n_steps)
   dimnames(R2) <- list(
     Electrode = repository$electrode_list,
@@ -212,11 +215,10 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
   )
 
   # calculate fragility
-  f <- foreach(iw = seq_len(n_steps),
-               .combine = cbind)%dopar%{
-                 ## fragility vector
-                 fragilityRow(A[,,iw])
-               }
+  f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
+    fragilityRow(A[,,iw])
+  }))
+  dim(f) <- c(n_elec, n_steps)
   f_naked=f
   dimnames(f) <- list(
     Electrode = repository$electrode_list,
@@ -407,7 +409,7 @@ ridgecv <- function(xt, xtp1, parallel=FALSE) {
             fitcoef <- tryCatch({
                 ridgecvTwoPass(x,y)
             }, error = function(e) {
-                fit <- glmnet(x, y,
+                fit <- glmnet::glmnet(x, y,
                     alpha = 0, lambda = 0,
                     standardize = FALSE,
                     intercept = FALSE
@@ -425,7 +427,7 @@ ridgecv <- function(xt, xtp1, parallel=FALSE) {
 ridgecvTwoPass <- function(x, y, lambdaRange = 10^-rev(1:10)){
     set.seed(1)
     ## first pass: determine the scale of lambda
-    fitcv1 <- cv.glmnet(x, y,
+    fitcv1 <- glmnet::cv.glmnet(x, y,
         alpha = 0,
         standardize = FALSE,
         intercept = FALSE,
@@ -438,7 +440,7 @@ ridgecvTwoPass <- function(x, y, lambdaRange = 10^-rev(1:10)){
 
     ## if the best lambda is the smallest one, then we do not use ridge regression
     if (bestlambda==min(lambdaRange)) {
-        fit <- glmnet(x, y,
+        fit <- glmnet::glmnet(x, y,
             alpha = 0, lambda = 0,
             standardize = FALSE,
             intercept = FALSE
@@ -448,7 +450,7 @@ ridgecvTwoPass <- function(x, y, lambdaRange = 10^-rev(1:10)){
 
     ## second pass: determine the optimal lambda
     lambdaRange2 <- seq(bestlambda/10, bestlambda*10, length.out = 1000)
-    fitcv2 <- cv.glmnet(x, y,
+    fitcv2 <- glmnet::cv.glmnet(x, y,
         alpha = 0,
         standardize = FALSE,
         intercept = FALSE,

@@ -230,8 +230,8 @@ fragility_pipeline$set_settings(
   load_electrodes = electrodes,
   display_electrodes = display,
   trial_num = 1,
-  t_window = 500,
-  t_step = 250,
+  t_window = 250,
+  t_step = 125,
   sz_onset = 0,
   lambda = 0.0001
 )
@@ -321,9 +321,13 @@ grDevices::dev.off()
 #   path = pdf_path
 # )
 
-# debug
+# DIPSAUS DEBUG START
 # repository <- results$repository
 # adj_frag_info <- results$adj_frag_info
 # trial_num = 1
 # t_window = 250
 # t_step = 125
+# timepoints = 1:1000
+# elec_num = 1
+# percentile = 0.1
+# display_electrodes <- c(33,34,62:69,88:91)
