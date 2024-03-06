@@ -192,7 +192,7 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
 
     return(list(Ai = Ai, R2 = R2))
   }, callback = function(iw) {
-    sprintf("Running XXX|Step %s", iw)
+    sprintf("Generating Adjacency Matrices|Timewindow %s", iw)
   })
 
   A <- unlist(raveio::lapply_async(res, function(w){
@@ -217,6 +217,8 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
   # calculate fragility
   f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
     fragilityRow(A[,,iw])
+  }, callback = function(iw) {
+    sprintf("Calculating Fragility|Timewindow %s", iw)
   }))
   dim(f) <- c(n_elec, n_steps)
   f_naked=f

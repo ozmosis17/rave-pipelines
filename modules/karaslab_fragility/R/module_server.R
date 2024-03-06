@@ -22,19 +22,11 @@ module_server <- function(input, output, session, ...){
   #   ))
   # )
 
-  # run_fragility <- function() {
-  #   pipeline$set_settings(
-  #     display_electrodes = dipsaus::parse_svec(input$display_electrodes),
-  #     trial_num = input$trial_num,
-  #     t_window = input$t_window,
-  #     t_step = input$t_step
-  #     sz_onset = input$sz_onset
-  #   )
-  # }
-
   # Register event: main pipeline need to run
   shiny::bindEvent(
     ravedash::safe_observe({
+
+      # Run analysis button is clicked
 
       # # Invalidate previous results (stop them because they are no longer needed)
       # if(!is.null(local_data$results)) {
@@ -52,24 +44,13 @@ module_server <- function(input, output, session, ...){
       t_step <- input$t_window * (as.numeric(input$t_step_percentage) / 100)
 
       pipeline$set_settings(
-        display_electrodes = input$display_electrodes,
+        display_electrodes = dipsaus::parse_svec(input$display_electrodes),
         trial_num = trial_num,
         t_window = input$t_window,
         t_step = t_step,
-        sz_onset = input$sz_onset
+        sz_onset = input$sz_onset,
+        lambda = input$lambda
       )
-
-      print(trial_num)
-      print(input$t_window)
-      print(t_step)
-
-      # pipeline$set_settings(
-      #   display_electrodes = dipsaus::parse_svec(input$display_electrodes),
-      #   trial_num = input$trial_num,
-      #   t_window = input$t_window,
-      #   t_step = input$t_step
-      #   sz_onset = input$sz_onset
-      # )
 
       #' Run pipeline without blocking the main session
       #' The trick to speed up is to set
@@ -138,8 +119,6 @@ module_server <- function(input, output, session, ...){
       loaded_flag <- ravedash::watch_data_loaded()
       if(!loaded_flag){ return() }
       new_repository <- pipeline$read("repository")
-      print(new_repository)
-      print(class(new_repository))
       if(!inherits(new_repository, "rave_prepare_subject_voltage_with_epoch")){
         ravedash::logger("Repository read from the pipeline, but it is not an instance of `rave_prepare_subject_voltage_with_epoch`. Abort initialization", level = "warning")
         return()
@@ -178,6 +157,12 @@ module_server <- function(input, output, session, ...){
         selected = component_container$data$trial_choices[pipeline$get_settings("trial_num")]
       )
 
+      shiny::updateTextInput(
+        session = session,
+        inputId = "display_electrodes",
+        value = pipeline$get_settings("load_electrodes")
+      )
+
       # Reset outputs
       # shidashi::reset_output("collapse_over_trial")
 
@@ -212,11 +197,12 @@ module_server <- function(input, output, session, ...){
       )
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+      print(str(results$adj_frag_info))
 
       do.call(voltage_recon_plot, c(results,
-                                    list(pipeline$read()$t_window,
-                                         pipeline$read()$t_step,
-                                         pipeline$read()$trial_num,
+                                    list(pipeline$get_settings("t_window"),
+                                         pipeline$get_settings("t_step"),
+                                         pipeline$get_settings("trial_num"),
                                          timepoints = 1:1000,
                                          elec_num = 1)
       ))
@@ -245,8 +231,8 @@ module_server <- function(input, output, session, ...){
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
       do.call(fragility_map_plot, c(results,
-                                    list(pipeline$read()$display_electrodes,
-                                         pipeline$read()$sz_onset,
+                                    list(pipeline$get_settings("display_electrodes"),
+                                         pipeline$get_settings("sz_onset"),
                                          elec_list = pipeline$read()$subject$get_electrode_table(),
                                          'sort_fmap' = 1,
                                          'height' = 14)

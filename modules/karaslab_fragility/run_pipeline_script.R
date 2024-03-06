@@ -2,6 +2,25 @@ ravedash::debug_modules(module_root = rstudioapi::getActiveProject())
 
 pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 
+library(readxl)
+library(stringr)
+
+i <- 20
+pipeline_xls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/FragilityEEGDataset_pipeline.xlsx")
+subject_code <- stringr::str_sub(pipeline_xls$subject[i], 5)
+project <- pipeline_xls$project[i]
+electrodes <- dipsaus::parse_svec(pipeline_xls$good_electrodes[i])
+display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
+if(is.null(display)){
+  display <- electrodes
+}
+sample_rate <- as.numeric(pipeline_xls$sample_rate[i])
+ictal_runs <- dipsaus::parse_svec(pipeline_xls$ictal_runs[i])
+epoch_times <- as.numeric(strsplit(pipeline_xls$epoch_times[i],",")[[1]])
+type <- pipeline_xls$type[i]
+import_format <- pipeline_xls$import_format[i]
+
+
 # subject_code <- "jh103"
 # project <- "FragilityEEGDataset"
 # electrodes <- c(1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110)
@@ -25,8 +44,7 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 
 #HUP dataset
 HUP_i <- 5
-library(readxl)
-library(stringr)
+
 HUPxls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/HUPDataset/participantsHUP121923.xlsx")
 subject_code <- stringr::str_sub(HUPxls$participant_id[HUP_i], 4)
 project <- "HUPDataset"
@@ -153,7 +171,7 @@ notch_pipeline$run('apply_notch')
 # generate epoch
 epoch_table <- data.frame(
   Block = subject$blocks,
-  Time = rep("120",length(subject$blocks)),
+  Time = epoch_times,
   Trial = seq_len(length(subject$blocks)),
   Condition = rep("sz_onset",length(subject$blocks)),
   Duration = rep(NA,length(subject$blocks))
@@ -211,7 +229,7 @@ if ('name' %in% colnames(channels)){
   electrodes_table$Label <- channels$name[subject$electrodes]
   raveio::safe_write_csv(electrodes_table, file.path(paste0(subject$meta_path,'/electrodes.csv')), row.names = FALSE)
 } else {
-  showNotification('Uploaded file is not in the proper format!')
+  showNotification('Target file is not in the proper format!')
 }
 
 # Fragility ----------------------------------------------
@@ -233,7 +251,7 @@ fragility_pipeline$set_settings(
   t_window = 250,
   t_step = 125,
   sz_onset = 0,
-  lambda = 0.0001
+  lambda = 0.001
 )
 
 # display image results ---------------------------------------
@@ -245,26 +263,27 @@ results <- c(fragility_pipeline$run(c("repository", "adj_frag_info")))
 
 # voltage reconstruction
 do.call(voltage_recon_plot, c(results,
-                              list(fragility_pipeline$get_settings()$t_window,
-                                   fragility_pipeline$get_settings()$t_step,
-                                   fragility_pipeline$get_settings()$trial_num,
+                              list(fragility_pipeline$get_settings("t_window"),
+                                   fragility_pipeline$get_settings("t_step"),
+                                   fragility_pipeline$get_settings("trial_num"),
                                    timepoints = 1:1000,
                                    elec_num = 1)
                               ))
 
 # fragility map
+
 do.call(fragility_map_plot, c(results,
-                              list(fragility_pipeline$get_settings()$display_electrodes,
-                                   fragility_pipeline$get_settings()$sz_onset,
+                              list(fragility_pipeline$get_settings("display_electrodes"),
+                                   fragility_pipeline$get_settings("sz_onset"),
                                    elec_list = subject$get_electrode_table(),
                                    'sort_fmap' = 1,
                                    'height' = 14)
                               ))
 
-t_start <- 0
-t_end <- 10
-threshold <- 0.5
-sz_onset_elec <- do.call(threshold_fragility, c(results, list(t_start, t_end, threshold)))
+# t_start <- 0
+# t_end <- 10
+# threshold <- 0.5
+# sz_onset_elec <- do.call(threshold_fragility, c(results, list(t_start, t_end, threshold)))
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
@@ -281,15 +300,15 @@ pdf_path <- file.path(export_path, paste0(subject$subject_code,'_',format(Sys.ti
 grDevices::pdf(pdf_path, width = 12, height = 7)
 par(mfrow=c(2,1),mar=rep(2,4))
 do.call(voltage_recon_plot, c(results,
-                              list(fragility_pipeline$get_settings()$t_window,
-                                   fragility_pipeline$get_settings()$t_step,
-                                   fragility_pipeline$get_settings()$trial_num,
+                              list(fragility_pipeline$get_settings("t_window"),
+                                   fragility_pipeline$get_settings("t_step"),
+                                   fragility_pipeline$get_settings("trial_num"),
                                    timepoints = 1:1000,
                                    elec_num = 1)
 ))
 do.call(fragility_map_plot, c(results,
-                              list(fragility_pipeline$get_settings()$display_electrodes,
-                                   fragility_pipeline$get_settings()$sz_onset,
+                              list(fragility_pipeline$get_settings("display_electrodes"),
+                                   fragility_pipeline$get_settings("sz_onset"),
                                    elec_list = subject$get_electrode_table(),
                                    'sort_fmap' = 1,
                                    'height' = 14)

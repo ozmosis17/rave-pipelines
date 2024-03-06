@@ -46,6 +46,15 @@ module_html <- function(){
                 ),
                 shidashi::flex_item(
                   shiny::selectInput(
+                    inputId = ns("lambda"),
+                    label = "Choose lambda",
+                    choices = c(0.1,0.01,0.001,0.0001),
+                    selected = 0.001,
+                    width = "100%"
+                  )
+                ),
+                shidashi::flex_item(
+                  shiny::selectInput(
                     inputId = ns("trial_num"),
                     label = "Choose trial",
                     choices = 1:4,
