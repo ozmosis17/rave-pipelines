@@ -5,7 +5,11 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-i <- 20
+pts <- dipsaus::parse_svec("1,3,5,7-23,25-26,31,35")
+
+pipeline_xls$subject[pts]
+
+for(i in pts)
 pipeline_xls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/FragilityEEGDataset_pipeline.xlsx")
 subject_code <- stringr::str_sub(pipeline_xls$subject[i], 5)
 project <- pipeline_xls$project[i]
@@ -43,18 +47,18 @@ import_format <- pipeline_xls$import_format[i]
 # import_format <- names(raveio::IMPORT_FORMATS)[4]
 
 #HUP dataset
-HUP_i <- 5
-
-HUPxls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/HUPDataset/participantsHUP121923.xlsx")
-subject_code <- stringr::str_sub(HUPxls$participant_id[HUP_i], 4)
-project <- "HUPDataset"
-electrodes <- dipsaus::parse_svec(HUPxls$`good electrodes`[HUP_i])
-display <- electrodes
-
-ictal_runs <- seq_len(HUPxls$`ictal run`[HUP_i])
-sample_rate <- 512
-type <- tolower(HUPxls$implant[HUP_i])
-import_format <- names(raveio::IMPORT_FORMATS)[3]
+# HUP_i <- 5
+#
+# HUPxls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/HUPDataset/participantsHUP121923.xlsx")
+# subject_code <- stringr::str_sub(HUPxls$participant_id[HUP_i], 4)
+# project <- "HUPDataset"
+# electrodes <- dipsaus::parse_svec(HUPxls$`good electrodes`[HUP_i])
+# display <- electrodes
+#
+# ictal_runs <- seq_len(HUPxls$`ictal run`[HUP_i])
+# sample_rate <- 512
+# type <- tolower(HUPxls$implant[HUP_i])
+# import_format <- names(raveio::IMPORT_FORMATS)[3]
 
 # Import subject from BIDS ----------------------------------------------
 
@@ -251,7 +255,10 @@ fragility_pipeline$set_settings(
   t_window = 250,
   t_step = 125,
   sz_onset = 0,
-  lambda = 0.001
+  lambda = 0.0001,
+  threshold_start = 0,
+  threshold_end = 10,
+  threshold = 0.5
 )
 
 # display image results ---------------------------------------
@@ -280,10 +287,6 @@ do.call(fragility_map_plot, c(results,
                                    'height' = 14)
                               ))
 
-# t_start <- 0
-# t_end <- 10
-# threshold <- 0.5
-# sz_onset_elec <- do.call(threshold_fragility, c(results, list(t_start, t_end, threshold)))
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
 source("./modules/karaslab_fragility/R/shared-plots.R")
@@ -311,7 +314,10 @@ do.call(fragility_map_plot, c(results,
                                    fragility_pipeline$get_settings("sz_onset"),
                                    elec_list = subject$get_electrode_table(),
                                    'sort_fmap' = 1,
-                                   'height' = 14)
+                                   'height' = 14,
+                                   threshold_start = 0,
+                                   threshold_end = 10,
+                                   threshold = 0.5)
 ))
 grDevices::dev.off()
 

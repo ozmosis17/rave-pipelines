@@ -65,7 +65,6 @@ module_html <- function(){
 
               ravedash::flex_group_box(
                 title = "Display",
-                shidashi::flex_container(
                   shidashi::flex_item(
                     shiny::textInput(
                       inputId = ns("display_electrodes"),
@@ -75,11 +74,27 @@ module_html <- function(){
                     )
                   ),
                   shidashi::flex_item(
-                    shiny::numericInput(
+                    shiny::sliderInput(
                       inputId = ns("sz_onset"),
                       label = "Seizure Onset Marker",
                       min = -10, max = 10, value = 0, width = "100%"
                     )
+                  )
+              ),
+              ravedash::flex_group_box(
+                title = "Thresholding",
+                shidashi::flex_item(
+                  shiny::sliderInput(
+                    inputId = ns("threshold_limits"),
+                    label = "Threshold limits",
+                    min = -10, max = 10, value = c(0,10), width = "100%"
+                  )
+                ),
+                shidashi::flex_item(
+                  shiny::numericInput(
+                    inputId = ns("threshold"),
+                    label = "Threshold value",
+                    min = -1, max = 1, value = 0.5, width = "100%"
                   )
                 )
               ),

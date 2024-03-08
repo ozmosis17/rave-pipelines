@@ -1,4 +1,4 @@
-fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10) {
+fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10, threshold_start, threshold_end, threshold) {
 
   m <- adj_frag_info$frag[as.character(display_electrodes),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
@@ -47,6 +47,16 @@ fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz
   secs <- seq(tp[1], tp[length(tp)])
   onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset,secs)]
 
+  # convert threshold-identified electrodes from numbers to names
+  threshold_elec_i <- as.numeric(adj_frag_info$threshold_elec)
+  if (!all(elec_list$Label == 'NoLabel')) {
+    threshold_elec_names <- paste0(elec_list$Label[threshold_elec_i], collapse = ", ")
+  } else {
+    threshold_elec_names <- dipsaus::deparse_svec(threshold_elec_i)
+  }
+
+  print(paste0("Electrodes with fragility > ", threshold, ": ", threshold_elec_names))
+
   # draw fragility map
   # change color scheme
   ravebuiltins:::draw_many_heat_maps(list(
@@ -61,6 +71,7 @@ fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz
     abline(v = onset, lty = 2, lwd = 2)
     mtext(rev(y), side=2, line=-1.5, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
     mtext(xtime, side=1, line=0, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
+    mtext(paste0(repository$subject$subject_code, " High Fragility Electrodes: \n", threshold_elec_names),side = 3)
   }, ravebuiltins:::spectrogram_heatmap_decorator())
   )
 }
@@ -78,7 +89,7 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
   n_steps <- S/t_step - (t_window/t_step) + 1 # n_steps is number of time windows
 
   # generate filearray for original voltage trace
-  v_orig <- filearray::filearray_load_or_create(
+  v_recon <- filearray::filearray_load_or_create(
     filebase = tempfile(),
     dimension = c(S, N),
     # dimnames = c("Timepoint", "Electrode"),
@@ -93,23 +104,13 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
     e <- dimnames(v)$Electrode
     idx_e <- which(repository$electrode_list == e)
 
-    v_orig[,idx_e] <- v[1:S, trial_num, 1, drop = TRUE]
+    v_recon[,idx_e] <- v[1:S, trial_num, 1, drop = TRUE]
     return()
   })
 
-  signalScaling <- 10^floor(log10(max(v_orig[])))
-  v_orig[] <- v_orig[]/signalScaling
-
-  # initialize filearray for reconstructed voltage trace
-  v_recon <- filearray::filearray_load_or_create(
-    filebase = tempfile(),
-    dimension = c(S, N),
-    # dimnames = c("Timepoint", "Electrode"),
-    type = "float", mode = "readwrite", partition_size = 1L,
-
-    # if repository has changed, re-calculate
-    repository_signature = repository$signature
-  )
+  signalScaling <- 10^floor(log10(max(v_recon[])))
+  v_recon[] <- v_recon[]/signalScaling
+  v_orig <- v_recon[]
 
   # populate v_recon with predicted values using adjacency matrix
   raveio::lapply_async(seq_len(n_steps), function(iw) {
@@ -127,11 +128,15 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
   df <- data.frame(timepoints,y1,y2)
 
   # check stability of adjacency matrix
-  eigv <- abs(eigen(A[,,1], only.values = TRUE)$values)
-  print(paste0('largest eigenvalue norm: ', max(eigv)))
+  me <- raveio::lapply_async(seq_len(n_steps), function(iw) {
+    AEigen <- eigen(A[,,iw])
+    e <- Mod(AEigen$values)
+    max(e)
+  })
+  print(paste0('largest eigenvalue norm: ', max(unlist(me))))
 
   # calculate mean squared error between y1 and y2
-  mse <- mean((v_orig[] - v_recon[])^2)
+  mse <- mean((v_orig - v_recon[])^2)
   print(paste0('MSE: ', mse))
 
   R2_percentile <- mean(apply(adj_frag_info$R2,2,quantile,percentile))
@@ -145,7 +150,7 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
          caption = paste0(percentile*100,
                           "th percentile of R2 (mean across time windows): ",
                           R2_percentile,
-                          "\n Largest eigenvalue norm: ", max(eigv),
+                          "\n Largest eigenvalue norm: ", max(unlist(me)),
                           "\n MSE: ", mse)) +
     scale_color_manual(values = c("original" = 'black', "reconstructed" = "red")) +
     ggtitle(paste0("Electrode ", elec_num, " Voltage Reconstruction"))

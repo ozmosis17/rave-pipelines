@@ -2,6 +2,7 @@ library(targets)
 library(raveio)
 source("common.R", local = TRUE, chdir = TRUE)
 ._._env_._. <- environment()
+._._env_._.$pipeline <- pipeline_from_path(".")
 lapply(sort(list.files(
   "R/", ignore.case = TRUE,
   pattern = "^shared-.*\\.R", 
@@ -18,10 +19,7 @@ rm(._._env_._.)
     }), deps = "settings_path", cue = targets::tar_cue("always")), 
     input_lambda = targets::tar_target_raw("lambda", quote({
         settings[["lambda"]]
-    }), deps = "settings"), input_signalscaling = targets::tar_target_raw("signalscaling", 
-        quote({
-            settings[["signalscaling"]]
-        }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
+    }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
         quote({
             settings[["sz_onset"]]
         }), deps = "settings"), input_project_name = targets::tar_target_raw("project_name", 
@@ -57,6 +55,15 @@ rm(._._env_._.)
         }), deps = "settings"), input_signalScaling = targets::tar_target_raw("signalScaling", 
         quote({
             settings[["signalScaling"]]
+        }), deps = "settings"), input_threshold_start = targets::tar_target_raw("threshold_start", 
+        quote({
+            settings[["threshold_start"]]
+        }), deps = "settings"), input_threshold_end = targets::tar_target_raw("threshold_end", 
+        quote({
+            settings[["threshold_end"]]
+        }), deps = "settings"), input_threshold = targets::tar_target_raw("threshold", 
+        quote({
+            settings[["threshold"]]
         }), deps = "settings"), load_subject = targets::tar_target_raw(name = "subject", 
         command = quote({
             .__target_expr__. <- quote({
@@ -170,7 +177,8 @@ rm(._._env_._.)
             .__target_expr__. <- quote({
                 adj_frag_info <- calc_adj_frag(repository = repository, 
                   trial_num = trial_num, t_window = t_window, 
-                  t_step = t_step, lambda = lambda)
+                  t_step = t_step, lambda = lambda, threshold_start = threshold_start, 
+                  threshold_end = threshold_end, threshold = threshold)
             })
             tryCatch({
                 eval(.__target_expr__.)
@@ -184,10 +192,13 @@ rm(._._env_._.)
                 {
                   adj_frag_info <- calc_adj_frag(repository = repository, 
                     trial_num = trial_num, t_window = t_window, 
-                    t_step = t_step, lambda = lambda)
+                    t_step = t_step, lambda = lambda, threshold_start = threshold_start, 
+                    threshold_end = threshold_end, threshold = threshold)
                 }
                 adj_frag_info
             }), target_depends = c("repository", "trial_num", 
-            "t_window", "t_step", "lambda")), deps = c("repository", 
-        "trial_num", "t_window", "t_step", "lambda"), cue = targets::tar_cue("thorough"), 
+            "t_window", "t_step", "lambda", "threshold_start", 
+            "threshold_end", "threshold")), deps = c("repository", 
+        "trial_num", "t_window", "t_step", "lambda", "threshold_start", 
+        "threshold_end", "threshold"), cue = targets::tar_cue("thorough"), 
         pattern = NULL, iteration = "list"))

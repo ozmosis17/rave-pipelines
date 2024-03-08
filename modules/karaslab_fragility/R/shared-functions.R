@@ -131,7 +131,7 @@ fragilityRow <- function(A, nSearch = 100) {
   return(fragNorm2)
 }
 
-calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.0001) {
+calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.0001, threshold_start, threshold_end, threshold = 0.5) {
 
   n_tps <- length(repository$voltage$dimnames$Time)
   n_elec <- length(repository$voltage$dimnames$Electrode)
@@ -241,145 +241,46 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
     #(f_col - min_f) / (max_f - min_f) # normalize from 0 to 1
   })
 
+  # convert from input t_start and t_end to timewindow indices
+  tw_start <- floor(which(threshold_start==repository$voltage$dimnames$Time)/t_step)
+  tw_end <- floor(which(threshold_end==repository$voltage$dimnames$Time)/t_step)
+  if (tw_end > n_steps) { tw_end <- n_steps }
+
+  # subset fragility matrix to specified timewindows
+  mat <- f_norm[,tw_start:tw_end]
+
+  avg_f <- rowMeans(mat)
+  elec <- attr(which(avg_f > threshold), "names")
+
   return(list(
     adj = A,
     frag = f_norm,
-    R2 = R2
-  ))
-}
-
-# calc_error <- function(repository, trial_num, t_window, t_step, index) {
-#   n_tps <- length(repository$voltage$dimnames$Time)
-#   n_elec <- length(repository$voltage$dimnames$Electrode)
-#
-#   # Number of steps
-#   n_steps <- floor((n_tps - t_window) / t_step) + 1
-#
-#   # slice of data
-#   arr <- filearray::filearray_load_or_create(
-#     filebase = tempfile(),
-#     dimension = c(n_tps, n_elec),
-#     type = "float", mode = "readwrite", partition_size = 1L,
-#
-#     # if repository has changed, re-calculate
-#     repository_signature = repository$signature,
-#     t_step = t_step, t_window = t_window,
-#     trial_num = trial_num,
-#
-#     on_missing = function(arr) {
-#       arr$set_header("ready", value = FALSE)
-#     }
-#   )
-#
-#   # check if header `ready` is not TRUE
-#   if(!isTRUE(arr$get_header("ready", FALSE))) {
-#
-#     loaded_electrodes <- repository$electrode_list
-#     raveio::lapply_async(repository$voltage$data_list, function(v) {
-#       e <- dimnames(v)$Electrode
-#       idx_e <- loaded_electrodes == e
-#
-#       arr[,idx_e] <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
-#
-#       return()
-#     })
-#   }
-#
-#   signalScaling <- 10^floor(log10(max(arr[])))
-#   arr[] <- arr[]/signalScaling
-#
-#   library(foreach)
-#   library(doParallel)
-#   registerDoParallel(parallel::detectCores())
-#
-#   si <- seq_len(ntw) + (index-1)*ntsl
-#
-#
-#   ## measurements at time point t
-#   xt <- timeSeries[si,]
-#   ## measurements at time point t plus 1
-#   xtp1 <- timeSeries[si + 1,]
-#
-#   ## Train/validation split
-#   train_prop <- 0.8
-#   train_size <- floor(nrow(xt)*train_prop)
-#   train_ind <- sample(seq_len(nrow(xt)), train_size)
-#   train_xt <- xt[train_ind,]
-#   train_xtp1 <- xtp1[train_ind,]
-#   test_xt <- xt[-train_ind,]
-#   test_xtp1 <- xtp1[-train_ind,]
-#
-#
-#
-#   #####################
-#   ## Verify the ridge regression cv works
-#   #####################
-#   ## Coefficient matrix A (adjacency matrix)
-#   ## each column is coefficients from a linear regression
-#   ## formula: xtp1 = xt*A
-#   A <- ridge(train_xt, train_xtp1, intercept = F, lambda = 0.0001)
-#   Acv <- ridgecv(train_xt, train_xtp1, parallel = TRUE)
-#
-#   ## two matrix should have the same dimension
-#   stopifnot(all.equal(dim(A), dim(Acv)))
-#
-#   ## prediction
-#   pred <- predictRidge(test_xt, A)
-#   predcv <- predictRidge(test_xt, Acv)
-#
-#   ## calculate error
-#   err <- pred - test_xtp1
-#   errcv <- predcv - test_xtp1
-#
-#   ## total error squared
-#   err2 <- mean(as.matrix(err^2))
-#   err2cv <- mean(as.matrix(errcv^2))
-#
-#   err2
-#   err2cv
-#
-#   ## Check Goodness of Fit
-#   R2 <- ridgeR2(xt,xtp1,A)
-#   hist(R2)
-#
-#   R2cv <- ridgeR2(xt,xtp1,Acv)
-#   hist(R2cv)
-#
-#   ## Check heatmap
-#   ## set diagonal to 0 to see if there is any outlier
-#   ## (diagonal is always outlier)
-#   heatA <- A
-#   diag(heatA) <- 0
-#   heatmap(heatA, Colv = NA, Rowv = NA, scale="none")
-#   range(heatA)
-#
-#
-#   heatAcv <- Acv
-#   diag(heatAcv) <- 0
-#   heatmap(heatAcv, Colv = NA, Rowv = NA, scale="none")
-#   range(heatAcv)
-# }
-
-threshold_fragility <- function(repository, adj_frag_info, t_start, t_end, threshold = 0.5) {
-  n_windows <- dim(adj_frag_info$adj)[3]
-  t_step <- floor(length(repository$voltage$dimnames$Time)/n_windows)
-
-  # convert from input t_start and t_end to timewindow indices
-  tw_start <- floor(which(t_start==repository$voltage$dimnames$Time)/t_step)
-  tw_end <- floor(which(t_end==repository$voltage$dimnames$Time)/t_step)
-  if (tw_end > n_windows) { tw_end <- n_windows }
-
-  # subset fragility matrix to specified timewindows
-  mat <- adj_frag_info$frag[,tw_start:tw_end]
-
-  avg_f <- rowMeans(mat)
-  elec <- which(avg_f > threshold)
-
-  return(list(
+    R2 = R2,
     avg_f = avg_f,
-    elecnames = attr(elec, "names")
+    threshold_elec = elec
   ))
 }
+
+# threshold_fragility <- function(repository, adj_frag_info, t_start, t_end, threshold = 0.5) {
+#   n_windows <- dim(adj_frag_info$adj)[3]
+#   t_step <- floor(length(repository$voltage$dimnames$Time)/n_windows)
+#
+#   # convert from input t_start and t_end to timewindow indices
+#   tw_start <- floor(which(t_start==repository$voltage$dimnames$Time)/t_step)
+#   tw_end <- floor(which(t_end==repository$voltage$dimnames$Time)/t_step)
+#   if (tw_end > n_windows) { tw_end <- n_windows }
+#
+#   # subset fragility matrix to specified timewindows
+#   mat <- adj_frag_info$frag[,tw_start:tw_end]
+#
+#   avg_f <- rowMeans(mat)
+#   elec <- which(avg_f > threshold)
+#
+#   return(list(
+#     avg_f = avg_f,
+#     elecnames = attr(elec, "names")
+#   ))
+# }
 
 ridgecv <- function(xt, xtp1, parallel=FALSE) {
     if (!identical(dim(xt), dim(xtp1))) {

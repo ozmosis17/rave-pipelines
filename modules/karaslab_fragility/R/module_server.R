@@ -49,7 +49,10 @@ module_server <- function(input, output, session, ...){
         t_window = input$t_window,
         t_step = t_step,
         sz_onset = input$sz_onset,
-        lambda = input$lambda
+        lambda = input$lambda,
+        threshold_start = input$threshold_limits[1],
+        threshold_end = input$threshold_limits[2],
+        threshold = input$threshold
       )
 
       #' Run pipeline without blocking the main session
@@ -160,7 +163,23 @@ module_server <- function(input, output, session, ...){
       shiny::updateTextInput(
         session = session,
         inputId = "display_electrodes",
-        value = pipeline$get_settings("load_electrodes")
+        value = dipsaus::deparse_svec(component_container$data$repository$electrode_table$Electrode)
+      )
+
+      shiny::updateSliderInput(
+        session = session,
+        inputId = "sz_onset",
+        min = component_container$repository$time_windows[[1]][1],
+        max = component_container$repository$time_windows[[1]][2],
+        value = 0
+      )
+
+      shiny::updateSliderInput(
+        session = session,
+        inputId = "threshold_limits",
+        min = component_container$repository$time_windows[[1]][1],
+        max = component_container$repository$time_windows[[1]][2],
+        value = c(0,component_container$repository$time_windows[[1]][2])
       )
 
       # Reset outputs
@@ -235,7 +254,10 @@ module_server <- function(input, output, session, ...){
                                          pipeline$get_settings("sz_onset"),
                                          elec_list = pipeline$read()$subject$get_electrode_table(),
                                          'sort_fmap' = 1,
-                                         'height' = 14)
+                                         'height' = 14,
+                                         threshold_start = pipeline$get_settings("threshold_start"),
+                                         threshold_end = pipeline$get_settings("threshold_end"),
+                                         threshold = pipeline$get_settings("threshold"))
       ))
     })
   )

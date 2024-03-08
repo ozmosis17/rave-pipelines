@@ -85,7 +85,10 @@ adj_frag_info <- calc_adj_frag(
   trial_num = trial_num,
   t_window = t_window,
   t_step = t_step,
-  lambda = lambda
+  lambda = lambda,
+  threshold_start = threshold_start,
+  threshold_end = threshold_end,
+  threshold = threshold
 )
 ```
 
