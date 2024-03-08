@@ -85,7 +85,17 @@ adj_frag_info <- calc_adj_frag(
   trial_num = trial_num,
   t_window = t_window,
   t_step = t_step,
-  lambda = lambda,
+  lambda = lambda
+)
+```
+
+#### Step 4: Find Electrodes Above Fragility Threshold
+
+```{rave find_threshold_elec, language = "R", export = "threshold_elec"}
+threshold_elec <- threshold_fragility(
+  repository = repository,
+  adj_frag_info = adj_frag_info,
+  t_step = t_step,
   threshold_start = threshold_start,
   threshold_end = threshold_end,
   threshold = threshold

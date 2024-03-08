@@ -75,8 +75,8 @@ module_server <- function(input, output, session, ...){
         # check_interval = 0.1,
         # shortcut = TRUE,
         names = c(
-          "adj_frag_info"#,
-          # names(settings)
+          "adj_frag_info",
+          "threshold_elec"
         )
       )
 
@@ -216,7 +216,6 @@ module_server <- function(input, output, session, ...){
       )
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
-      print(str(results$adj_frag_info))
 
       do.call(voltage_recon_plot, c(results,
                                     list(pipeline$get_settings("t_window"),
@@ -247,17 +246,14 @@ module_server <- function(input, output, session, ...){
         )
       )
 
-      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+      results <- pipeline$read(var_names = c("repository","adj_frag_info","threshold_elec"))
 
       do.call(fragility_map_plot, c(results,
                                     list(pipeline$get_settings("display_electrodes"),
                                          pipeline$get_settings("sz_onset"),
                                          elec_list = pipeline$read()$subject$get_electrode_table(),
                                          'sort_fmap' = 1,
-                                         'height' = 14,
-                                         threshold_start = pipeline$get_settings("threshold_start"),
-                                         threshold_end = pipeline$get_settings("threshold_end"),
-                                         threshold = pipeline$get_settings("threshold"))
+                                         'height' = 14)
       ))
     })
   )

@@ -1,4 +1,4 @@
-fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10, threshold_start, threshold_end, threshold) {
+fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10) {
 
   m <- adj_frag_info$frag[as.character(display_electrodes),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
@@ -48,14 +48,15 @@ fragility_map_plot <- function(repository, adj_frag_info, display_electrodes, sz
   onset <- seq(1, length(x), length.out = length(secs))[match(sz_onset,secs)]
 
   # convert threshold-identified electrodes from numbers to names
-  threshold_elec_i <- as.numeric(adj_frag_info$threshold_elec)
+  threshold_elec_i <- as.numeric(threshold_elec$elecnames)
   if (!all(elec_list$Label == 'NoLabel')) {
-    threshold_elec_names <- paste0(elec_list$Label[threshold_elec_i], collapse = ", ")
+    elec_i <- match(threshold_elec_i, elec_list$Electrode)
+    threshold_elec_names <- paste0(elec_list$Label[elec_i], collapse = ", ")
   } else {
     threshold_elec_names <- dipsaus::deparse_svec(threshold_elec_i)
   }
 
-  print(paste0("Electrodes with fragility > ", threshold, ": ", threshold_elec_names))
+  print(paste0("Electrodes with fragility above specified threshold: ", threshold_elec_names))
 
   # draw fragility map
   # change color scheme

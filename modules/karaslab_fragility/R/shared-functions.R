@@ -131,7 +131,7 @@ fragilityRow <- function(A, nSearch = 100) {
   return(fragNorm2)
 }
 
-calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.0001, threshold_start, threshold_end, threshold = 0.5) {
+calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.0001) {
 
   n_tps <- length(repository$voltage$dimnames$Time)
   n_elec <- length(repository$voltage$dimnames$Electrode)
@@ -241,46 +241,32 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.00
     #(f_col - min_f) / (max_f - min_f) # normalize from 0 to 1
   })
 
-  # convert from input t_start and t_end to timewindow indices
-  tw_start <- floor(which(threshold_start==repository$voltage$dimnames$Time)/t_step)
-  tw_end <- floor(which(threshold_end==repository$voltage$dimnames$Time)/t_step)
-  if (tw_end > n_steps) { tw_end <- n_steps }
-
-  # subset fragility matrix to specified timewindows
-  mat <- f_norm[,tw_start:tw_end]
-
-  avg_f <- rowMeans(mat)
-  elec <- attr(which(avg_f > threshold), "names")
-
   return(list(
     adj = A,
     frag = f_norm,
-    R2 = R2,
-    avg_f = avg_f,
-    threshold_elec = elec
+    R2 = R2
   ))
 }
 
-# threshold_fragility <- function(repository, adj_frag_info, t_start, t_end, threshold = 0.5) {
-#   n_windows <- dim(adj_frag_info$adj)[3]
-#   t_step <- floor(length(repository$voltage$dimnames$Time)/n_windows)
-#
-#   # convert from input t_start and t_end to timewindow indices
-#   tw_start <- floor(which(t_start==repository$voltage$dimnames$Time)/t_step)
-#   tw_end <- floor(which(t_end==repository$voltage$dimnames$Time)/t_step)
-#   if (tw_end > n_windows) { tw_end <- n_windows }
-#
-#   # subset fragility matrix to specified timewindows
-#   mat <- adj_frag_info$frag[,tw_start:tw_end]
-#
-#   avg_f <- rowMeans(mat)
-#   elec <- which(avg_f > threshold)
-#
-#   return(list(
-#     avg_f = avg_f,
-#     elecnames = attr(elec, "names")
-#   ))
-# }
+threshold_fragility <- function(repository, adj_frag_info, t_step, threshold_start, threshold_end, threshold = 0.5) {
+  n_windows <- dim(adj_frag_info$adj)[3]
+
+  # convert from input t_start and t_end to timewindow indices
+  tw_start <- floor(which(threshold_start==repository$voltage$dimnames$Time)/t_step)
+  tw_end <- floor(which(threshold_end==repository$voltage$dimnames$Time)/t_step)
+  if (tw_end > n_windows) { tw_end <- n_windows }
+
+  # subset fragility matrix to specified timewindows
+  mat <- adj_frag_info$frag[,tw_start:tw_end]
+
+  avg_f <- rowMeans(mat)
+  elec <- which(avg_f > threshold)
+
+  return(list(
+    avg_f = avg_f,
+    elecnames = attr(elec, "names")
+  ))
+}
 
 ridgecv <- function(xt, xtp1, parallel=FALSE) {
     if (!identical(dim(xt), dim(xtp1))) {

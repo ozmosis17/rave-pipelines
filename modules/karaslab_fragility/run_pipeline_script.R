@@ -266,10 +266,10 @@ fragility_pipeline$set_settings(
 source("./modules/karaslab_fragility/R/shared-plots.R")
 subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
-results <- c(fragility_pipeline$run(c("repository", "adj_frag_info")))
+results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
 
 # voltage reconstruction
-do.call(voltage_recon_plot, c(results,
+do.call(voltage_recon_plot, c(results[1:2],
                               list(fragility_pipeline$get_settings("t_window"),
                                    fragility_pipeline$get_settings("t_step"),
                                    fragility_pipeline$get_settings("trial_num"),
@@ -278,7 +278,6 @@ do.call(voltage_recon_plot, c(results,
                               ))
 
 # fragility map
-
 do.call(fragility_map_plot, c(results,
                               list(fragility_pipeline$get_settings("display_electrodes"),
                                    fragility_pipeline$get_settings("sz_onset"),
@@ -297,12 +296,12 @@ export_path <- file.path(subject$note_path, "karaslab_fragility")
 #export_path <- file.path("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Fragility 2.0 Project/FragilityEEGDataset/")
 raveio::dir_create2(export_path)
 
-results <- c(fragility_pipeline$run(c("repository", "adj_frag_info")))
+results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
 
 pdf_path <- file.path(export_path, paste0(subject$subject_code,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
 grDevices::pdf(pdf_path, width = 12, height = 7)
 par(mfrow=c(2,1),mar=rep(2,4))
-do.call(voltage_recon_plot, c(results,
+do.call(voltage_recon_plot, c(results[1:2],
                               list(fragility_pipeline$get_settings("t_window"),
                                    fragility_pipeline$get_settings("t_step"),
                                    fragility_pipeline$get_settings("trial_num"),
@@ -314,10 +313,7 @@ do.call(fragility_map_plot, c(results,
                                    fragility_pipeline$get_settings("sz_onset"),
                                    elec_list = subject$get_electrode_table(),
                                    'sort_fmap' = 1,
-                                   'height' = 14,
-                                   threshold_start = 0,
-                                   threshold_end = 10,
-                                   threshold = 0.5)
+                                   'height' = 14)
 ))
 grDevices::dev.off()
 

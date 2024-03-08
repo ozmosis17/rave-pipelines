@@ -177,8 +177,7 @@ rm(._._env_._.)
             .__target_expr__. <- quote({
                 adj_frag_info <- calc_adj_frag(repository = repository, 
                   trial_num = trial_num, t_window = t_window, 
-                  t_step = t_step, lambda = lambda, threshold_start = threshold_start, 
-                  threshold_end = threshold_end, threshold = threshold)
+                  t_step = t_step, lambda = lambda)
             })
             tryCatch({
                 eval(.__target_expr__.)
@@ -192,13 +191,38 @@ rm(._._env_._.)
                 {
                   adj_frag_info <- calc_adj_frag(repository = repository, 
                     trial_num = trial_num, t_window = t_window, 
-                    t_step = t_step, lambda = lambda, threshold_start = threshold_start, 
-                    threshold_end = threshold_end, threshold = threshold)
+                    t_step = t_step, lambda = lambda)
                 }
                 adj_frag_info
             }), target_depends = c("repository", "trial_num", 
-            "t_window", "t_step", "lambda", "threshold_start", 
-            "threshold_end", "threshold")), deps = c("repository", 
-        "trial_num", "t_window", "t_step", "lambda", "threshold_start", 
-        "threshold_end", "threshold"), cue = targets::tar_cue("thorough"), 
+            "t_window", "t_step", "lambda")), deps = c("repository", 
+        "trial_num", "t_window", "t_step", "lambda"), cue = targets::tar_cue("thorough"), 
+        pattern = NULL, iteration = "list"), find_threshold_elec = targets::tar_target_raw(name = "threshold_elec", 
+        command = quote({
+            .__target_expr__. <- quote({
+                threshold_elec <- threshold_fragility(repository = repository, 
+                  adj_frag_info = adj_frag_info, t_step = t_step, 
+                  threshold_start = threshold_start, threshold_end = threshold_end, 
+                  threshold = threshold)
+            })
+            tryCatch({
+                eval(.__target_expr__.)
+                return(threshold_elec)
+            }, error = function(e) {
+                asNamespace("raveio")$resolve_pipeline_error(name = "threshold_elec", 
+                  condition = e, expr = .__target_expr__.)
+            })
+        }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
+            target_export = "threshold_elec", target_expr = quote({
+                {
+                  threshold_elec <- threshold_fragility(repository = repository, 
+                    adj_frag_info = adj_frag_info, t_step = t_step, 
+                    threshold_start = threshold_start, threshold_end = threshold_end, 
+                    threshold = threshold)
+                }
+                threshold_elec
+            }), target_depends = c("repository", "adj_frag_info", 
+            "t_step", "threshold_start", "threshold_end", "threshold"
+            )), deps = c("repository", "adj_frag_info", "t_step", 
+        "threshold_start", "threshold_end", "threshold"), cue = targets::tar_cue("thorough"), 
         pattern = NULL, iteration = "list"))
