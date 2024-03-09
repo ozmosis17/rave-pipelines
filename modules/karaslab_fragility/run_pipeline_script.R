@@ -7,11 +7,12 @@ library(stringr)
 
 pts <- dipsaus::parse_svec("1,3,5,7-23,25-26,31,35")
 
+pipeline_xls <- readxl::read_xlsx("/Volumes/bigbrain/Fragility2024/FragilityEEGDataset_pipeline.xlsx")
 pipeline_xls$subject[pts]
 
-for(i in pts)
-pipeline_xls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/FragilityEEGDataset_pipeline.xlsx")
-subject_code <- stringr::str_sub(pipeline_xls$subject[i], 5)
+for(i in pts){
+
+subject_code <- stringr::str_sub(pipeline_xls$subject[i], 4)
 project <- pipeline_xls$project[i]
 electrodes <- dipsaus::parse_svec(pipeline_xls$good_electrodes[i])
 display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
@@ -261,30 +262,31 @@ fragility_pipeline$set_settings(
   threshold = 0.5
 )
 
-# display image results ---------------------------------------
-#env <- fragility_pipeline$load_shared()
-source("./modules/karaslab_fragility/R/shared-plots.R")
-subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
-
-results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
-
+# # display image results ---------------------------------------
+# #env <- fragility_pipeline$load_shared()
+# source("./modules/karaslab_fragility/R/shared-plots.R")
+# subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
+#
+# results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
+#
 # voltage reconstruction
-do.call(voltage_recon_plot, c(results[1:2],
-                              list(fragility_pipeline$get_settings("t_window"),
-                                   fragility_pipeline$get_settings("t_step"),
-                                   fragility_pipeline$get_settings("trial_num"),
-                                   timepoints = 1:1000,
-                                   elec_num = 1)
-                              ))
-
-# fragility map
-do.call(fragility_map_plot, c(results,
-                              list(fragility_pipeline$get_settings("display_electrodes"),
-                                   fragility_pipeline$get_settings("sz_onset"),
-                                   elec_list = subject$get_electrode_table(),
-                                   'sort_fmap' = 1,
-                                   'height' = 14)
-                              ))
+# do.call(voltage_recon_plot, c(results[1:2],
+#                               list(fragility_pipeline$get_settings("t_window"),
+#                                    fragility_pipeline$get_settings("t_step"),
+#                                    fragility_pipeline$get_settings("trial_num"),
+#                                    timepoints = 1:1000,
+#                                    elec_num = 1,
+#                                    lambda = fragility_pipeline$get_settings("lambda"))
+#                               ))
+#
+# # fragility map
+# do.call(fragility_map_plot, c(results,
+#                               list(fragility_pipeline$get_settings("display_electrodes"),
+#                                    fragility_pipeline$get_settings("sz_onset"),
+#                                    elec_list = subject$get_electrode_table(),
+#                                    'sort_fmap' = 1,
+#                                    'height' = 14)
+#                               ))
 
 # for plotting to pdf ---------------------------------------
 # env <- fragility_pipeline$load_shared()
@@ -292,11 +294,14 @@ source("./modules/karaslab_fragility/R/shared-plots.R")
 
 #subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
 
-export_path <- file.path(subject$note_path, "karaslab_fragility")
+export_path <- file.path("/Volumes/bigbrain/Fragility2024", "FragilityResults")
 #export_path <- file.path("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Fragility 2.0 Project/FragilityEEGDataset/")
 raveio::dir_create2(export_path)
 
 results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
+
+# env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
+# results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
 pdf_path <- file.path(export_path, paste0(subject$subject_code,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
 grDevices::pdf(pdf_path, width = 12, height = 7)
@@ -306,7 +311,8 @@ do.call(voltage_recon_plot, c(results[1:2],
                                    fragility_pipeline$get_settings("t_step"),
                                    fragility_pipeline$get_settings("trial_num"),
                                    timepoints = 1:1000,
-                                   elec_num = 1)
+                                   elec_num = 1,
+                                   lambda = fragility_pipeline$get_settings("lambda"))
 ))
 do.call(fragility_map_plot, c(results,
                               list(fragility_pipeline$get_settings("display_electrodes"),
@@ -316,7 +322,7 @@ do.call(fragility_map_plot, c(results,
                                    'height' = 14)
 ))
 grDevices::dev.off()
-
+}
 # export_pdf(
 #   {
 #     par(mfrow=c(2,1),mar=rep(2,4))

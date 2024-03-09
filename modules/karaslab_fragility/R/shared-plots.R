@@ -77,7 +77,7 @@ fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, displa
   )
 }
 
-voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, trial_num, timepoints = 1:250, elec_num = 1, percentile = 0.1) {
+voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, trial_num, timepoints = 1:250, elec_num = 1, percentile = 0.1, lambda) {
 
   A <- adj_frag_info$adj
   S <- length(repository$voltage$dimnames$Time) # S is total number of timepoints
@@ -142,13 +142,14 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
 
   R2_percentile <- mean(apply(adj_frag_info$R2,2,quantile,percentile))
 
-  g <- ggplot(df, aes(timepoints)) +
+  g <- ggplot2::ggplot(df, aes(timepoints)) +
     geom_line(aes(y=y1, color = "original")) +
     geom_line(aes(y=y2, color = "reconstructed")) +
     labs(x = "Time (ms)",
          y = paste0("Voltage"),
          color = "Legend",
-         caption = paste0(percentile*100,
+         caption = paste0("Lambda: ", lambda, "\n",
+                          percentile*100,
                           "th percentile of R2 (mean across time windows): ",
                           R2_percentile,
                           "\n Largest eigenvalue norm: ", max(unlist(me)),
