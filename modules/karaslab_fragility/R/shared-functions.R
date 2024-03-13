@@ -131,7 +131,7 @@ fragilityRow <- function(A, nSearch = 100) {
   return(fragNorm2)
 }
 
-calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda = 0.0001) {
+calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
 
   n_tps <- length(repository$voltage$dimnames$Time)
   n_elec <- length(repository$voltage$dimnames$Electrode)

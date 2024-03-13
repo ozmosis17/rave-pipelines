@@ -217,12 +217,13 @@ module_server <- function(input, output, session, ...){
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      do.call(voltage_recon_plot, c(results,
+      do.call(voltage_recon_plot, c(results[1:2],
                                     list(pipeline$get_settings("t_window"),
                                          pipeline$get_settings("t_step"),
                                          pipeline$get_settings("trial_num"),
                                          timepoints = 1:1000,
-                                         elec_num = 1)
+                                         elec_num = 1,
+                                         lambda = pipeline$get_settings("lambda"))
       ))
     })
   )

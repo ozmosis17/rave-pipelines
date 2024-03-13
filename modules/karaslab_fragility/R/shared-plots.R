@@ -1,4 +1,4 @@
-fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10) {
+fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10, threshold) {
 
   m <- adj_frag_info$frag[as.character(display_electrodes),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
@@ -56,7 +56,7 @@ fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, displa
     threshold_elec_names <- dipsaus::deparse_svec(threshold_elec_i)
   }
 
-  print(paste0("Electrodes with fragility above specified threshold: ", threshold_elec_names))
+  print(paste0("Electrodes with Fragility > ", threshold, ": ", threshold_elec_names))
 
   # draw fragility map
   # change color scheme
@@ -72,7 +72,7 @@ fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, displa
     abline(v = onset, lty = 2, lwd = 2)
     mtext(rev(y), side=2, line=-1.5, at=yi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
     mtext(xtime, side=1, line=0, at=xi, cex=(ravebuiltins:::rave_cex.lab*0.6), las=1)
-    mtext(paste0(repository$subject$subject_code, " High Fragility Electrodes: \n", threshold_elec_names),side = 3)
+    mtext(paste0(repository$subject$subject_code, " Electrodes with Fragility > ", threshold, ": \n", threshold_elec_names),side = 3)
   }, ravebuiltins:::spectrogram_heatmap_decorator())
   )
 }
