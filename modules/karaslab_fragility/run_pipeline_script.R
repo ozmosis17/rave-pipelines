@@ -7,26 +7,29 @@ library(stringr)
 
 pts <- dipsaus::parse_svec("1,3,5,7-23,25-26,31,35")
 
+# pipeline_xls <- readxl::read_xlsx("/Volumes/bigbrain/Fragility2024/FragilityEEGDataset_pipeline.xlsx")
 pipeline_xls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/FragilityEEGDataset_pipeline.xlsx")
 pipeline_xls$subject[pts]
 
-SOZ_table <- data.frame(
-  subject = stringr::str_sub(pipeline_xls$subject[pts], 4),
-  SOZ_elec = NA,
-  #SOZc_elec = NA,
-  SOZ_elec_i = NA
-  #SOZc_elec_i = NA
-)
+# not in use
+# SOZ_table <- data.frame(
+#   subject = stringr::str_sub(pipeline_xls$subject[pts], 4),
+#   SOZ_elec = NA,
+#   #SOZc_elec = NA,
+#   SOZ_elec_i = NA
+#   #SOZc_elec_i = NA
+# )
 
 for(i in pts){
 
   subject_code <- stringr::str_sub(pipeline_xls$subject[i], 4)
   project <- pipeline_xls$project[i]
   electrodes <- dipsaus::parse_svec(pipeline_xls$good_electrodes[i])
-  display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
-  if(is.null(display)){
-    display <- electrodes
-  }
+  display <- electrodes # display all electrodes
+  # display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
+  # if(is.null(display)){
+  #   display <- electrodes
+  # }
   sample_rate <- as.numeric(pipeline_xls$sample_rate[i])
   ictal_runs <- dipsaus::parse_svec(pipeline_xls$ictal_runs[i])
   epoch_times <- as.numeric(strsplit(pipeline_xls$epoch_times[i],",")[[1]])
@@ -35,28 +38,7 @@ for(i in pts){
 
   subject_check <- raveio::validate_subject(paste0(project,"/",subject_code),
                                             method = "basic", verbose = FALSE)
-  subject_check$paths$data_path$valid
-
-  # subject_code <- "jh103"
-  # project <- "FragilityEEGDataset"
-  # electrodes <- c(1:4,7:12,15:23,25:33,47:63,65:66,69:71,73:110)
-  # #display <- electrodes
-  # display <- c(1:2,15:21,25:33,75:78,86,94)
-  # ictal_runs <- 1:3
-  # type <- "ecog"
-  # import_format <- names(raveio::IMPORT_FORMATS)[4]
-  # sample_rate <- 1000
-  #
-  # subject_code <- "pt01"
-  # project <- "FragilityEEGDataset"
-  # electrodes <- c(1:4,7:24,26:36,42:43,46:54,56:70,72:95)
-  # #display <- electrodes
-  # display <- c(33,34,62:69,88:91)
-  #
-  # ictal_runs <- 1:4
-  # sample_rate <- 1000
-  # type <- "ecog"
-  # import_format <- names(raveio::IMPORT_FORMATS)[4]
+  # subject_check$paths$data_path$valid
 
   #HUP dataset
   # HUP_i <- 5
@@ -201,6 +183,8 @@ for(i in pts){
     )
 
     # generate reference
+    # rave::start_rave2() # alternatively, create reference.csv through rave UI
+
     raveio::generate_reference(paste0(project,'/',subject_code), electrodes)
 
     `%?<-%` <- dipsaus::`%?<-%`
@@ -208,6 +192,7 @@ for(i in pts){
     electrode_table <- subject$get_electrode_table()
     electrode_table$LabelPrefix %?<-% "All"
 
+    # common average reference
     reference_table <- lapply(split(electrode_table, electrode_table$LabelPrefix), function(sub) {
       data.frame(
         Electrode = sub$Electrode,
@@ -217,7 +202,7 @@ for(i in pts){
       )
     })
 
-    # # bipolar by LabelPrefix
+    # # bipolar reference
     # reference_table <- lapply(split(electrode_table, electrode_table$LabelPrefix), function(sub) {
     #   reference <- c(sprintf("ref_%d", sub$Electrode[-1]), "noref")
     #   data.frame(
@@ -235,10 +220,7 @@ for(i in pts){
     raveio::safe_write_csv(
       reference_table,
       file.path(subject$meta_path, "reference_car.csv")
-      #row.names = FALSE <- test if this is necessary
     )
-
-    # rave::start_rave2() # need to create reference.csv through rave UI
 
     # label electrodes using channels.tsv file
     channels <- read.delim(paste0(raveio::rave_directories(subject_code, project, .force_format = "BIDS")$bids_subject_path,"/ses-presurgery/ieeg/sub-",subject_code,"_ses-presurgery_task-ictal_acq-",type,"_run-01_channels.tsv"))
@@ -260,112 +242,125 @@ for(i in pts){
   #raveio::pipeline_visualize(fragility_pipeline$pipeline_path)
   #fragility_pipeline$get_settings()
 
-  fragility_pipeline$set_settings(
-    project_name = project,
-    subject_code = subject_code,
-    epoch_name = "seizure_onset",
-    epoch_time_window = c(-10,10),
-    reference_name = "car",
-    load_electrodes = electrodes,
-    display_electrodes = display,
-    trial_num = 1,
-    t_window = 250,
-    t_step = 125,
-    sz_onset = 0,
-    lambda = 0.001,
-    threshold_start = 0,
-    threshold_end = 10,
-    threshold = 0.5
-  )
-
-  # # display image results ---------------------------------------
-  # #env <- fragility_pipeline$load_shared()
-  # source("./modules/karaslab_fragility/R/shared-plots.R")
-  # subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
-  #
-  # results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
-  #
-  # voltage reconstruction
-  # do.call(voltage_recon_plot, c(results[1:2],
-  #                               list(fragility_pipeline$get_settings("t_window"),
-  #                                    fragility_pipeline$get_settings("t_step"),
-  #                                    fragility_pipeline$get_settings("trial_num"),
-  #                                    timepoints = 1:1000,
-  #                                    elec_num = 1,
-  #                                    lambda = fragility_pipeline$get_settings("lambda"))
-  #                               ))
-  #
-  # # fragility map
-  # do.call(fragility_map_plot, c(results,
-  #                               list(fragility_pipeline$get_settings("display_electrodes"),
-  #                                    fragility_pipeline$get_settings("sz_onset"),
-  #                                    elec_list = subject$get_electrode_table(),
-  #                                    'sort_fmap' = 1,
-  #                                    'height' = 14)
-  #                               ))
-
-  # for plotting to pdf ---------------------------------------
-  # env <- fragility_pipeline$load_shared()
-  source("./modules/karaslab_fragility/R/shared-plots.R")
-
+  # set subject object from rave
   subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
-
   elec_list <- subject$get_electrode_table()
 
-  # test <- fragility_pipeline$eval("repository")
-  # str(test$repository$voltage$data_list[[1]][])
-
-  results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
-
-  export_path <- file.path("/Volumes/bigbrain/Fragility2024", "FragilityResults")
-
+  # create export directory for this subject
+  # export_path <- file.path("/Volumes/bigbrain/Fragility2024/FragilityResults", subject_code)
+  export_path <- file.path("/Volumes/OFZ1_T7/karaslab/FragilityResults", subject_code)
   raveio::dir_create2(export_path)
 
-  # env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
-  # results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
+  for (trial_num in ictal_runs) {
 
-  # print results to pdf
+    fragility_pipeline$set_settings(
+      project_name = project,
+      subject_code = subject_code,
+      epoch_name = "seizure_onset",
+      epoch_time_window = c(-10,10),
+      reference_name = "car",
+      load_electrodes = electrodes,
+      display_electrodes = display,
+      trial_num = trial_num,
+      t_window = 250,
+      t_step = 125,
+      sz_onset = 0,
+      lambda = 0.001,
+      threshold_start = 0,
+      threshold_end = 10,
+      threshold = 0.5
+    )
 
-  pdf_path <- file.path(export_path, paste0(subject$subject_code,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
-  grDevices::pdf(pdf_path, width = 12, height = 7)
-  par(mfrow=c(2,1),mar=rep(2,4))
-  g <- do.call(voltage_recon_plot, c(results[1:2],
-                                     list(fragility_pipeline$get_settings("t_window"),
-                                          fragility_pipeline$get_settings("t_step"),
-                                          fragility_pipeline$get_settings("trial_num"),
-                                          timepoints = 1:1000,
-                                          elec_num = 1,
-                                          lambda = fragility_pipeline$get_settings("lambda"))
-  ))
-  print(g)
-  do.call(fragility_map_plot, c(results,
-                                list(fragility_pipeline$get_settings("display_electrodes"),
-                                     fragility_pipeline$get_settings("sz_onset"),
-                                     elec_list = elec_list,
-                                     'sort_fmap' = 1,
-                                     'height' = 14,
-                                     threshold = fragility_pipeline$get_settings("threshold"))
-  ))
-  grDevices::dev.off()
+    # # display image results in R ---------------------------------------
+    # #env <- fragility_pipeline$load_shared()
+    # source("./modules/karaslab_fragility/R/shared-plots.R")
+    # subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
+    #
+    # results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
+    #
+    # voltage reconstruction
+    # do.call(voltage_recon_plot, c(results[1:2],
+    #                               list(fragility_pipeline$get_settings("t_window"),
+    #                                    fragility_pipeline$get_settings("t_step"),
+    #                                    fragility_pipeline$get_settings("trial_num"),
+    #                                    timepoints = 1:1000,
+    #                                    elec_num = 1,
+    #                                    lambda = fragility_pipeline$get_settings("lambda"))
+    #                               ))
+    #
+    # # fragility map
+    # do.call(fragility_map_plot, c(results,
+    #                               list(fragility_pipeline$get_settings("display_electrodes"),
+    #                                    fragility_pipeline$get_settings("sz_onset"),
+    #                                    elec_list = subject$get_electrode_table(),
+    #                                    'sort_fmap' = 1,
+    #                                    'height' = 14)
+    #                               ))
 
-  # save electrodes above threshold to SOZ_table
-  threshold_elec_i <- as.numeric(results$threshold_elec$elecnames)
-  if (!all(elec_list$Label == 'NoLabel')) {
-    elec_i <- match(threshold_elec_i, elec_list$Electrode)
-    threshold_elec_names <- paste0(elec_list$Label[elec_i], collapse = ", ")
-  } else {
-    threshold_elec_names <- dipsaus::deparse_svec(threshold_elec_i)
+    # for plotting to pdf ---------------------------------------
+    # env <- fragility_pipeline$load_shared()
+    source("./modules/karaslab_fragility/R/shared-plots.R")
+
+    # test <- fragility_pipeline$eval("repository")
+    # str(test$repository$voltage$data_list[[1]][])
+
+    results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
+
+    # save fragility matrix results to csv
+    raveio::safe_write_csv(
+      results$adj_frag_info$frag,
+      file.path(export_path, paste0(subject_code, "_seizure", trial_num,"_fragility.csv"))
+    )
+
+    # env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
+    # results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
+
+    # print results to pdf
+    pdf_path <- file.path(export_path, paste0(subject_code,'_seizure',trial_num,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
+    grDevices::pdf(pdf_path, width = 12, height = 7)
+    par(mfrow=c(2,1),mar=rep(2,4))
+
+    # fragility heatmap
+    do.call(fragility_map_plot, c(results,
+                                  list(fragility_pipeline$get_settings("display_electrodes"),
+                                       fragility_pipeline$get_settings("sz_onset"),
+                                       elec_list = elec_list,
+                                       'sort_fmap' = 1,
+                                       'height' = 14,
+                                       threshold = fragility_pipeline$get_settings("threshold"))
+    ))
+
+    # voltage reconstruction
+    g <- do.call(voltage_recon_plot, c(results[1:2],
+                                       list(fragility_pipeline$get_settings("t_window"),
+                                            fragility_pipeline$get_settings("t_step"),
+                                            fragility_pipeline$get_settings("trial_num"),
+                                            timepoints = 1:1000,
+                                            elec_num = 1,
+                                            lambda = fragility_pipeline$get_settings("lambda"))
+    ))
+    print(g)
+    grDevices::dev.off()
+
+    # save electrodes above threshold to SOZ_table (not in use)
+    # threshold_elec_i <- as.numeric(results$threshold_elec$elecnames)
+    # if (!all(elec_list$Label == 'NoLabel')) {
+    #   elec_i <- match(threshold_elec_i, elec_list$Electrode)
+    #   threshold_elec_names <- paste0(elec_list$Label[elec_i], collapse = ", ")
+    # } else {
+    #   threshold_elec_names <- dipsaus::deparse_svec(threshold_elec_i)
+    # }
+    #
+    # SOZ_table$SOZ_elec[match(paste0(subject_code),SOZ_table$subject)] <- threshold_elec_names
+    # #SOZ_table$SOZc_elec[match(paste0(subject_code),SOZ_table$subject)]
+    # SOZ_table$SOZ_elec_i[match(paste0(subject_code),SOZ_table$subject)] <- dipsaus::deparse_svec(threshold_elec_i)
+    # #SOZ_table$SOZc_elec_i[match(paste0(subject_code),SOZ_table$subject)]
   }
-
-  SOZ_table$SOZ_elec[match(paste0(subject_code),SOZ_table$subject)] <- threshold_elec_names
-  #SOZ_table$SOZc_elec[match(paste0(subject_code),SOZ_table$subject)]
-  SOZ_table$SOZ_elec_i[match(paste0(subject_code),SOZ_table$subject)] <- dipsaus::deparse_svec(threshold_elec_i)
-  #SOZ_table$SOZc_elec_i[match(paste0(subject_code),SOZ_table$subject)]
 }
 
 raveio::safe_write_csv(
   SOZ_table,
-  file.path(export_path, paste0(project, '.csv'))
+  file.path(export_path, paste0(project, '_fragility.csv'))
 )
 
 # export_pdf(
