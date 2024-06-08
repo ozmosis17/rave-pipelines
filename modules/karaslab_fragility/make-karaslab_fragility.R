@@ -2,7 +2,6 @@ library(targets)
 library(raveio)
 source("common.R", local = TRUE, chdir = TRUE)
 ._._env_._. <- environment()
-._._env_._.$pipeline <- pipeline_from_path(".")
 lapply(sort(list.files(
   "R/", ignore.case = TRUE,
   pattern = "^shared-.*\\.R", 
@@ -17,53 +16,53 @@ rm(._._env_._.)
     quote({
         yaml::read_yaml(settings_path)
     }), deps = "settings_path", cue = targets::tar_cue("always")), 
-    input_lambda = targets::tar_target_raw("lambda", quote({
-        settings[["lambda"]]
-    }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
+    input_threshold = targets::tar_target_raw("threshold", quote({
+        settings[["threshold"]]
+    }), deps = "settings"), input_threshold_end = targets::tar_target_raw("threshold_end", 
         quote({
-            settings[["sz_onset"]]
-        }), deps = "settings"), input_project_name = targets::tar_target_raw("project_name", 
-        quote({
-            settings[["project_name"]]
-        }), deps = "settings"), input_subject_code = targets::tar_target_raw("subject_code", 
-        quote({
-            settings[["subject_code"]]
-        }), deps = "settings"), input_reference_name = targets::tar_target_raw("reference_name", 
-        quote({
-            settings[["reference_name"]]
-        }), deps = "settings"), input_epoch_time_window = targets::tar_target_raw("epoch_time_window", 
-        quote({
-            settings[["epoch_time_window"]]
-        }), deps = "settings"), input_t_step = targets::tar_target_raw("t_step", 
-        quote({
-            settings[["t_step"]]
-        }), deps = "settings"), input_epoch_name = targets::tar_target_raw("epoch_name", 
-        quote({
-            settings[["epoch_name"]]
-        }), deps = "settings"), input_t_window = targets::tar_target_raw("t_window", 
-        quote({
-            settings[["t_window"]]
-        }), deps = "settings"), input_display_electrodes = targets::tar_target_raw("display_electrodes", 
-        quote({
-            settings[["display_electrodes"]]
-        }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
-        quote({
-            settings[["load_electrodes"]]
-        }), deps = "settings"), input_trial_num = targets::tar_target_raw("trial_num", 
-        quote({
-            settings[["trial_num"]]
-        }), deps = "settings"), input_signalScaling = targets::tar_target_raw("signalScaling", 
-        quote({
-            settings[["signalScaling"]]
+            settings[["threshold_end"]]
         }), deps = "settings"), input_threshold_start = targets::tar_target_raw("threshold_start", 
         quote({
             settings[["threshold_start"]]
-        }), deps = "settings"), input_threshold_end = targets::tar_target_raw("threshold_end", 
+        }), deps = "settings"), input_signalScaling = targets::tar_target_raw("signalScaling", 
         quote({
-            settings[["threshold_end"]]
-        }), deps = "settings"), input_threshold = targets::tar_target_raw("threshold", 
+            settings[["signalScaling"]]
+        }), deps = "settings"), input_trial_num = targets::tar_target_raw("trial_num", 
         quote({
-            settings[["threshold"]]
+            settings[["trial_num"]]
+        }), deps = "settings"), input_load_electrodes = targets::tar_target_raw("load_electrodes", 
+        quote({
+            settings[["load_electrodes"]]
+        }), deps = "settings"), input_display_electrodes = targets::tar_target_raw("display_electrodes", 
+        quote({
+            settings[["display_electrodes"]]
+        }), deps = "settings"), input_t_window = targets::tar_target_raw("t_window", 
+        quote({
+            settings[["t_window"]]
+        }), deps = "settings"), input_epoch_name = targets::tar_target_raw("epoch_name", 
+        quote({
+            settings[["epoch_name"]]
+        }), deps = "settings"), input_t_step = targets::tar_target_raw("t_step", 
+        quote({
+            settings[["t_step"]]
+        }), deps = "settings"), input_epoch_time_window = targets::tar_target_raw("epoch_time_window", 
+        quote({
+            settings[["epoch_time_window"]]
+        }), deps = "settings"), input_reference_name = targets::tar_target_raw("reference_name", 
+        quote({
+            settings[["reference_name"]]
+        }), deps = "settings"), input_subject_code = targets::tar_target_raw("subject_code", 
+        quote({
+            settings[["subject_code"]]
+        }), deps = "settings"), input_project_name = targets::tar_target_raw("project_name", 
+        quote({
+            settings[["project_name"]]
+        }), deps = "settings"), input_sz_onset = targets::tar_target_raw("sz_onset", 
+        quote({
+            settings[["sz_onset"]]
+        }), deps = "settings"), input_lambda = targets::tar_target_raw("lambda", 
+        quote({
+            settings[["lambda"]]
         }), deps = "settings"), load_subject = targets::tar_target_raw(name = "subject", 
         command = quote({
             .__target_expr__. <- quote({

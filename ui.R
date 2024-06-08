@@ -1,2 +1,2 @@
-shidashi::template_settings$set('root_path' = '/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/rave-pipelines')
+shidashi::template_settings$set('root_path' = '/Volumes/bigbrain/Fragility2024/rave_pipeline')
 shidashi::adminlte_ui()

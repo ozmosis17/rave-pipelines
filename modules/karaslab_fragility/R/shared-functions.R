@@ -38,11 +38,11 @@ ridge <- function(xt, xtp1, lambda, intercept = FALSE, iw) {
   AEigen <- eigen(A)
   e <- Mod(AEigen$values)
   me <- max(e)
-  if(me >= 1){
-    print(paste0("Solution in timewindow ",iw," is not stable (",me,")"))
-  } else {
-    print(paste0("Solution in timewindow ",iw," is stable (",me,")"))
-  }
+  # if(me >= 1){
+  #   print(paste0("Solution in timewindow ",iw," is not stable (",me,")"))
+  # } else {
+  #   print(paste0("Solution in timewindow ",iw," is stable (",me,")"))
+  # }
   A
 }
 
@@ -62,7 +62,94 @@ ridgeR2 <- function(xt, xtp1, A) {
   R2
 }
 
-fragilityRow <- function(A, nSearch = 100) {
+ridgesearchlambdadichomotomy <- function(xt, xtp1, intercept = FALSE, iw){
+  if(!identical(dim(xt),dim(xtp1)))
+    stop("Unmatched dimension")
+  nel <- ncol(xt)
+  ## Coefficient matrix A
+  ## each column is coefficients from a linear regression
+  ## formula: xtp1 = xt*A + E
+  lambdamin <- 0.0001
+  lambdamax <- 10
+
+
+  Aa <- ridge(xt,xtp1,lambda=lambdamin,intercept=F, iw = iw)
+
+  stableam <- TRUE
+
+  nel <- ncol(Aa)
+  e <- Mod(eigen(Aa)$values)
+  me <- max(e)
+
+  if (me >= 1) {
+    stableam <- FALSE
+  }
+
+  #print(stableam)
+
+  if(stableam){
+    lambdaopt <- lambdamin
+    Afin <- Aa
+  }else{
+
+    stablea <- stableam
+    lambdaa <- lambdamin
+
+    lambdab=lambdamax
+
+    Ab<-ridge(xt,xtp1,lambda=lambdab,intercept=F, iw = iw)
+
+    stableb <- TRUE
+
+    nel <- ncol(Ab)
+    e <- Mod(eigen(Ab)$values)
+    me <- max(e)
+
+    if (me >= 1) {
+      stableb <- FALSE
+    }
+
+    #print(stableb)
+    k <- 0
+    while(k<20){
+      lambdac <- (lambdaa + lambdab)*0.5
+
+      Ac<-ridge(xt,xtp1,lambda=lambdac,intercept=F, iw = iw)
+
+      stablec <- TRUE
+
+      nel <- ncol(Ac)
+      e <- Mod(eigen(Ac)$values)
+      me <- max(e)
+
+      if (me >= 1) {
+        stablec <- FALSE
+      }
+
+      if(!stablec){
+        lambdaa <- lambdac
+        lambdaopt <- lambdab
+
+      }else{
+        lambdab <- lambdac
+        lambdaopt <- lambdac
+      }
+      k <- k+1
+
+      # print("ite")
+      # print(k)
+      # print(lambdac)
+      # print(stablec)
+      # print(lambdaopt)
+    }
+    Afin <- Ac
+  }
+
+  attr(Afin, "lambdaopt") <- lambdaopt
+  Afin
+}
+
+fragilityRowNormalized <- function(A, nSearch = 100) {
   ## The adjacency matrix A here is a transpose of the
   ## adjacency matrix in the original paper
   nel <- ncol(A)
@@ -131,6 +218,75 @@ fragilityRow <- function(A, nSearch = 100) {
   return(fragNorm2)
 }
 
+
+fragilityRow <- function(A, nSearch = 100) {
+  ## The adjacency matrix A here is a transpose of the
+  ## adjacency matrix in the original paper
+  nel <- ncol(A)
+  e <- Mod(eigen(A)$values)
+  me <- max(e)
+
+  if (me >= 1) {
+    #return(0)
+  }
+
+
+  fragcol <- matrix(0, nel, nel)
+  fragNorm <- rep(0, nel)
+  omvec <- seq(0, 1, length.out = nSearch + 1)[-1]
+
+  b <- c(0, -1)
+  ## for each electrode
+  for (i in 1:nel) {
+    ## indicate which electrode is disturbed (ith)
+    ek <- rep(0, nel)
+    ek[i] <- 1
+    tek <- t(ek)
+    minNorm <- 100000
+    minPerturbColumn <- NA
+    for (k in seq_len(nSearch)) {
+      ## imaginary part
+      om <- omvec[k]
+      ## real part
+      sigma <- sqrt(1 - om^2)
+      ## target eigenvalue
+      lambda <- complex(real = sigma, imaginary = om)
+      ## A - (sigma + j* omega)*I
+      mat <- A - lambda * diag(nel)
+      imat <- t(solve(mat))
+
+      argument <- tek %*% imat
+      B <- rbind(Im(argument), Re(argument))
+      ## B^T*(B*B^T)^-1*b
+      invBtB <- solve(B %*% t(B))
+      prov <- t(B) %*% invBtB %*% b
+
+      sigma_hat <- ek %*% t(prov)
+
+      ## validation
+      if (FALSE) {
+        A2 <- A + sigma_hat
+        e2 <- eigen(A2)$values
+        closestIndex <- which.min(abs(e2 - lambda))
+        e2[closestIndex]
+      }
+
+      norm_sigma_hat <- norm(sigma_hat, type = "2")
+      if (norm_sigma_hat < minNorm) {
+        minPerturbColumn <- prov
+        minNorm <- norm(prov, type = "2")
+      }
+    }
+
+    fragcol[, i] <- minPerturbColumn
+    fragNorm[i] <- minNorm
+  }
+
+
+
+  return(fragNorm)
+}
+
 calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
 
   n_tps <- length(repository$voltage$dimnames$Time)
@@ -186,7 +342,114 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     ## Coefficient matrix A (adjacency matrix)
     ## each column is coefficients from a linear regression
     ## formula: xtp1 = xt*A + E
-    Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+    # Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+    Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
+
+    R2 <- ridgeR2(xt,xtp1,Ai)
+
+    return(list(Ai = Ai, R2 = R2))
+  }, callback = function(iw) {
+    sprintf("Generating Adjacency Matrices|Timewindow %s", iw)
+  })
+
+  A <- unlist(raveio::lapply_async(res, function(w){
+    w$Ai
+  }))
+  dim(A) <- c(n_elec, n_elec, n_steps)
+  dimnames(A) <- list(
+    Electrode1 = repository$electrode_list,
+    Electrode2 = repository$electrode_list,
+    Step = seq_len(n_steps)
+  )
+
+  R2 <- unlist(raveio::lapply_async(res, function(w){
+    w$R2
+  }))
+  dim(R2) <- c(n_elec, n_steps)
+  dimnames(R2) <- list(
+    Electrode = repository$electrode_list,
+    Step = seq_len(n_steps)
+  )
+
+  # calculate fragility
+  f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
+    fragilityRow(A[,,iw])
+  }, callback = function(iw) {
+    sprintf("Calculating Fragility|Timewindow %s", iw)
+  }))
+  dim(f) <- c(n_elec, n_steps)
+  f_naked=f
+  dimnames(f) <- list(
+    Electrode = repository$electrode_list,
+    Step = seq_len(n_steps)
+  )
+
+
+  return(list(
+    adj = A,
+    frag = f,
+    R2 = R2
+  ))
+}
+
+
+calc_adj_frag_oliver <- function(repository, trial_num, t_window, t_step, lambda) {
+
+  n_tps <- length(repository$voltage$dimnames$Time)
+  n_elec <- length(repository$voltage$dimnames$Electrode)
+
+  # Number of steps
+  n_steps <- floor((n_tps - t_window) / t_step) + 1
+
+  # slice of data
+  arr <- filearray::filearray_load_or_create(
+    filebase = tempfile(),
+    dimension = c(n_tps, n_elec),
+    type = "float", mode = "readwrite", partition_size = 1L,
+
+    # if repository has changed, re-calculate
+    repository_signature = repository$signature,
+    t_step = t_step, t_window = t_window,
+    trial_num = trial_num,
+
+    on_missing = function(arr) {
+      arr$set_header("ready", value = FALSE)
+    }
+  )
+
+  # check if header `ready` is not TRUE
+  if(!isTRUE(arr$get_header("ready", FALSE))) {
+
+    loaded_electrodes <- repository$electrode_list
+    raveio::lapply_async(repository$voltage$data_list, function(v) {
+      e <- dimnames(v)$Electrode
+      idx_e <- loaded_electrodes == e
+
+      arr[,idx_e] <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
+
+      return()
+    })
+  }
+
+  signalScaling <- 10^floor(log10(max(arr[])))
+  arr[] <- arr[]/signalScaling
+
+  ## create adjacency array (array of adj matrices for each time window)
+  ## iw: The index of the window we are going to calculate fragility
+
+  res <- raveio::lapply_async(seq_len(n_steps), function(iw) {
+    ## Sample indices for the selected window
+    si <- seq_len(t_window-1) + (iw-1)*t_step
+    ## measurements at time point t
+    xt <- arr[si,]
+    ## measurements at time point t plus 1
+    xtp1 <- arr[si + 1,]
+
+    ## Coefficient matrix A (adjacency matrix)
+    ## each column is coefficients from a linear regression
+    ## formula: xtp1 = xt*A + E
+    # Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+    Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
 
     R2 <- ridgeR2(xt,xtp1,Ai)
 
@@ -252,8 +515,8 @@ threshold_fragility <- function(repository, adj_frag_info, t_step, threshold_sta
   n_windows <- dim(adj_frag_info$adj)[3]
 
   # convert from input t_start and t_end to timewindow indices
-  tw_start <- floor(which(threshold_start==repository$voltage$dimnames$Time)/t_step)
-  tw_end <- floor(which(threshold_end==repository$voltage$dimnames$Time)/t_step)
+  tw_start <- floor(which.min(abs(threshold_start-repository$voltage$dimnames$Time))/t_step)
+  tw_end <- floor(which.min(abs(threshold_end-repository$voltage$dimnames$Time))/t_step)
   if (tw_end > n_windows) { tw_end <- n_windows }
 
   # subset fragility matrix to specified timewindows
