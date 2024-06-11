@@ -160,6 +160,16 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
   g
 }
 
+# y1 <- repository$voltage$data_list$e_1[]
+# y2 <- Fragrepository$voltage$data_list$e_1[]
+# y1 <- y1[1:1000,2]
+# y2 <- y2[1:1000,1]
+# df <- data.frame(timepoints,y1,y2)
+#
+# ggplot2::ggplot(df, aes(timepoints)) +
+#   geom_line(aes(y=y1, color = "retrostudy")) +
+#   geom_line(aes(y=y2, color = "frag")) +
+#   scale_color_manual(values = c("retrostudy" = 'black', "frag" = "red"))
 
 export_pdf <- function(expr, path, env = parent.frame(),
                        quoted = FALSE, width = 12, height = 7, useDingbats = FALSE, ...) {

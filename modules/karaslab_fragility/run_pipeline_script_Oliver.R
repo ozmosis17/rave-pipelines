@@ -5,12 +5,14 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-#pts <- dipsaus::parse_svec("1,3,5,7-23,25-26,31,35")
-pts <- dipsaus::parse_svec("1-22")
+#export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearchNoRank"
+#export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearchRanked"
+export_path <- "/Volumes/OFZ1_T7/karaslab/Results_FragilityLambdaSearchNoRank"
 
-pipeline_xls <- readxl::read_xlsx("/Volumes/bigbrain/Fragility2024/FragilityEEGDataset_pipeline_update.xlsx")
-#pipeline_xls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/FragilityEEGDataset/FragilityEEGDataset_pipeline.xlsx")
-pipeline_xls$subject[pts]
+pts <- dipsaus::parse_svec("1-22")
+pipeline_xls <- read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/patient_data_all_fragility_clean.csv")
+pipeline_xls <- readxl::read_xlsx("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/FragilityEEGDataset_pipeline.xlsx")
+pipeline_xls$subject[1]
 
 # not in use
 # SOZ_table <- data.frame(
@@ -29,19 +31,27 @@ for(i in pts){
   # display <- electrodes
 
 
-  subject_code <- pipeline_xls$subject[i]
-  project <- pipeline_xls$project[i]
-  electrodes <- dipsaus::parse_svec(pipeline_xls$good_electrodes[i])
+  subject_code <- pipeline_xls$subject_code[i]
+  project <- pipeline_xls$project_name[i]
+  electrodes <- dipsaus::parse_svec(pipeline_xls$load_electrodes[i])
   display <- electrodes # display all electrodes
+
+  epoch_name <- pipeline_xls$epoch_file_name[i]
+  reference_name <- pipeline_xls$reference_name[i]
+  condition <- pipeline_xls$condition[i]
+
+  soz <- dipsaus::parse_svec(pipeline_xls$SOZ[i])
+  sozc <- electrodes[!(electrodes%in%soz)]
+
   # display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
   # if(is.null(display)){
   #   display <- electrodes
   # }
-  sample_rate <- as.numeric(pipeline_xls$sample_rate[i])
-  ictal_runs <- dipsaus::parse_svec(pipeline_xls$ictal_runs[i])
-  epoch_times <- as.numeric(strsplit(pipeline_xls$epoch_times[i],",")[[1]])
-  type <- pipeline_xls$type[i]
-  import_format <- pipeline_xls$import_format[i]
+  #sample_rate <- as.numeric(pipeline_xls$sample_rate[i])
+  #ictal_runs <- dipsaus::parse_svec(pipeline_xls$ictal_runs[i])
+  #epoch_times <- as.numeric(strsplit(pipeline_xls$epoch_times[i],",")[[1]])
+  #type <- pipeline_xls$type[i]
+  #import_format <- pipeline_xls$import_format[i]
 
   subject_check <- raveio::validate_subject(paste0(project,"/",subject_code),
                                             method = "basic", verbose = FALSE)
@@ -254,19 +264,19 @@ for(i in pts){
   elec_list <- subject$get_electrode_table()
 
   # create export directory for this subject
-  export_path <- file.path("/Volumes/bigbrain/Fragility2024/FragilityResultsUpdate", subject_code)
-  # export_path <- file.path("/Volumes/OFZ1_T7/karaslab/FragilityResults", subject_code)
-  raveio::dir_create2(export_path)
+  export <- file.path(export_path, subject_code)
+  raveio::dir_create2(export)
 
-
-  for (trial_num in (ictal_runs*2)) {
+  # extracts trial_num from between the parentheses in condition
+  trial_num <- substr(condition, unlist(gregexpr("\\(", condition)) + 1, unlist(gregexpr("\\)", condition)) - 1)
+  trial_num <- as.numeric(trial_num)
 
     fragility_pipeline$set_settings(
       project_name = project,
       subject_code = subject_code,
-      epoch_name = paste0(subject_code,"_seizure"),
-      epoch_time_window = c(-10,30),
-      reference_name = "car",
+      epoch_name = epoch_name,
+      epoch_time_window = c(-10,20),
+      reference_name = reference_name,
       load_electrodes = electrodes,
       display_electrodes = display,
       trial_num = trial_num,
@@ -275,7 +285,7 @@ for(i in pts){
       sz_onset = 0,
       lambda = 0.001,
       threshold_start = 0,
-      threshold_end = 30,
+      threshold_end = 20,
       threshold = 0.5
     )
 
@@ -309,27 +319,185 @@ for(i in pts){
     # env <- fragility_pipeline$load_shared()
     source("./modules/karaslab_fragility/R/shared-plots.R")
 
-    # test <- fragility_pipeline$eval("repository")
-    # str(test$repository$voltage$data_list[[1]][])
     tryCatch(
       error = function(e){
-        if (exists(export_path)) {
-          file.rename(export_path, file.path("/Volumes/bigbrain/Fragility2024/FragilityResults", paste0(subject_code,"_ERROR")))
+        if (exists(export)) {
+          file.rename(export, file.path(export_path, paste0(subject_code,"_ERROR")))
         }
       },{
         results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
 
+        env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
+        results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
+
         # save fragility matrix results to csv
         raveio::safe_write_csv(
           results$adj_frag_info$frag,
-          file.path(export_path, paste0(subject_code, "_seizure", trial_num/2,"_fragility.csv"))
+          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_fragility.csv"))
         )
 
-        # env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
-        # results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
+        ####
+        n_tps <- length(results$repository$voltage$dimnames$Time)
+        n_elec <- length(electrodes)
+        t_window <- 250
+        t_step <- 125
+        n_steps <- floor((n_tps - t_window) / t_step) + 1
+        epoch_time_window <- fragility_pipeline$get_settings("epoch_time_window")
+        fs <- 1000
+
+        fragmap <- results$adj_frag_info$frag
+        fragmap <- fragmap[as.character(c(soz,sozc)),]
+        stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
+        fplot_data <- expand.grid(Time = stimes, Electrode = elecnum)
+        fplot_data$Value <- c(t(fragmap))
+        titlepng=paste(subject_code,'Seizure',as.character(trial_num),sep=" ")
+
+        # without ranking
+        ploton <- TRUE
+        if(ploton==TRUE){
+          #plot organized fragility map with soz electrodes on bottom
+          ggplot(fplot_data, aes(x = Time, y = Electrode, fill = Value)) +
+            geom_tile() +
+            ggtitle(titlepng)+
+            labs(x = "Time (s)", y = "Electrode") +
+            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
+            theme_minimal() +
+            theme(
+              axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+            )
+        }
+
+        f_ranked <- matrix(rank(fragmap), nrow(fragmap), ncol(fragmap))
+        attributes(f_ranked) <- attributes(fragmap)
+        f_ranked <- f_ranked/max(f_ranked)
+
+        fplot_data$Value <- c(t(f_ranked))
+        titlepng=paste(subject_code,'Seizure',as.character(trial_num),sep=" ")
+
+        # with ranking
+        ploton <- TRUE
+        if(ploton==TRUE){
+          #plot organized fragility map with soz electrodes on bottom
+          ggplot(fplot_data, aes(x = Time, y = Electrode, fill = Value)) +
+            geom_tile() +
+            ggtitle(titlepng)+
+            labs(x = "Time (s)", y = "Electrode") +
+            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
+            theme_minimal() +
+            theme(
+              axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+            )
+        }
+
+        hmapsoz <- f_ranked[as.character(soz),]
+        hmapsozc <- f_ranked[as.character(sozc),]
+
+        f90soz=quantile(hmapsoz, probs=c(0.9))
+        f90sozc=quantile(hmapsozc,probs=c(0.9))
+
+        quantilematrixsozsozc=matrix(0,20,length(stimes))
+        cmeansoz=c(1:length(stimes))*0
+        cmeansozc=c(1:length(stimes))*0
+        csdsoz=c(1:length(stimes))*0
+        csdsozc=c(1:length(stimes))*0
+
+        for(i in 1:length(stimes)){
+
+          colsoz=hmapsoz[,i]
+          colsozc=hmapsozc[,i]
+
+          meansoz=mean(colsoz)
+          sdsoz=sd(colsoz)
+          meansozc=mean(colsozc)
+          sdsozc=sd(colsozc)
+
+          cmeansoz[i]=meansoz
+          cmeansozc[i]=meansozc
+          csdsoz[i]=sdsoz
+          csdsozc[i]=sdsozc
+
+          f10colsoz<-quantile(colsoz,probs=c(0.1))
+          f20colsoz<-quantile(colsoz,probs=c(0.2))
+          f30colsoz<-quantile(colsoz,probs=c(0.3))
+          f40colsoz<-quantile(colsoz,probs=c(0.4))
+          f50colsoz<-quantile(colsoz,probs=c(0.5))
+          f60colsoz<-quantile(colsoz,probs=c(0.6))
+          f70colsoz<-quantile(colsoz,probs=c(0.7))
+          f80colsoz<-quantile(colsoz,probs=c(0.8))
+          f90colsoz<-quantile(colsoz,probs=c(0.9))
+          f100colsoz<-quantile(colsoz,probs=c(1.0))
+
+          f10colsozc<-quantile(colsozc,probs=c(0.1))
+          f20colsozc<-quantile(colsozc,probs=c(0.2))
+          f30colsozc<-quantile(colsozc,probs=c(0.3))
+          f40colsozc<-quantile(colsozc,probs=c(0.4))
+          f50colsozc<-quantile(colsozc,probs=c(0.5))
+          f60colsozc<-quantile(colsozc,probs=c(0.6))
+          f70colsozc<-quantile(colsozc,probs=c(0.7))
+          f80colsozc<-quantile(colsozc,probs=c(0.8))
+          f90colsozc<-quantile(colsozc,probs=c(0.9))
+          f100colsozc<-quantile(colsozc,probs=c(1.0))
+
+          quantilematrixsozsozc[1,i]=f10colsoz
+          quantilematrixsozsozc[2,i]=f20colsoz
+          quantilematrixsozsozc[3,i]=f30colsoz
+          quantilematrixsozsozc[4,i]=f40colsoz
+          quantilematrixsozsozc[5,i]=f50colsoz
+          quantilematrixsozsozc[6,i]=f60colsoz
+          quantilematrixsozsozc[7,i]=f70colsoz
+          quantilematrixsozsozc[8,i]=f80colsoz
+          quantilematrixsozsozc[9,i]=f90colsoz
+          quantilematrixsozsozc[10,i]=f100colsoz
+          quantilematrixsozsozc[11,i]=f10colsozc
+          quantilematrixsozsozc[12,i]=f20colsozc
+          quantilematrixsozsozc[13,i]=f30colsozc
+          quantilematrixsozsozc[14,i]=f40colsozc
+          quantilematrixsozsozc[15,i]=f50colsozc
+          quantilematrixsozsozc[16,i]=f60colsozc
+          quantilematrixsozsozc[17,i]=f70colsozc
+          quantilematrixsozsozc[18,i]=f80colsozc
+          quantilematrixsozsozc[19,i]=f90colsozc
+          quantilematrixsozsozc[20,i]=f100colsozc
+
+        }
+
+        quantilesname<-c('SOZ(10th)','SOZ(20th)','SOZ(30th)','SOZ(40th)','SOZ(50th)',
+                         'SOZ(60th)','SOZ(70th)','SOZ(80th)','SOZ(90th)','SOZ(100th)',
+                         'SOZc(10th)','SOZc(20th)','SOZc(30th)','SOZc(40th)','SOZc(50th)',
+                         'SOZc(60th)','SOZc(70th)','SOZc(80th)','SOZc(90th)','SOZc(100th)')
+        quantileplot<- expand.grid(Time = stimes, Stats=quantilesname)
+        quantileplot$Value <- c(t(quantilematrixsozsozc))
+
+        if(ploton==TRUE){
+
+          ggplot(quantileplot, aes(x = Time, y = Stats, fill = Value)) +
+            geom_tile() +
+            ggtitle(titlepng)+
+            labs(x = "Time (s)", y = "Statistic") +
+            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
+            theme_minimal() +
+            theme(
+              axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
+            )
+
+          file=paste(path,subject_code,'/',subject_code,'_seizure',as.character(j),'_quantiles.png',sep="")
+          ggsave(file)
+        }
+        quantilesave=c()
+        quantilesave <- rbind(quantilesave,quantileplot$Value)
+
+        dimnames(quantilematrixsozsozc) <- list(
+          Quantile = quantilesname,
+          Time = stimes
+        )
+
+        raveio::safe_write_csv(
+          quantilematrixsozsozc,
+          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_fragilityquantile.csv"))
+        )
 
         # print results to pdf
-        pdf_path <- file.path(export_path, paste0(subject_code,'_seizure',trial_num/2,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
+        pdf_path <- file.path(export, paste0(subject_code,'_seizure',trial_num/2,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
         grDevices::pdf(pdf_path, width = 12, height = 7)
         par(mfrow=c(2,1),mar=rep(2,4))
 
@@ -369,12 +537,12 @@ for(i in pts){
     # #SOZ_table$SOZc_elec[match(paste0(subject_code),SOZ_table$subject)]
     # SOZ_table$SOZ_elec_i[match(paste0(subject_code),SOZ_table$subject)] <- dipsaus::deparse_svec(threshold_elec_i)
     # #SOZ_table$SOZc_elec_i[match(paste0(subject_code),SOZ_table$subject)]
-  }
+
 }
 
 raveio::safe_write_csv(
   SOZ_table,
-  file.path(export_path, paste0(project, '_fragility.csv'))
+  file.path(export, paste0(project, '_fragility.csv'))
 )
 
 # export_pdf(

@@ -218,7 +218,6 @@ fragilityRowNormalized <- function(A, nSearch = 100) {
   return(fragNorm2)
 }
 
-
 fragilityRow <- function(A, nSearch = 100) {
   ## The adjacency matrix A here is a transpose of the
   ## adjacency matrix in the original paper
@@ -371,9 +370,12 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     Step = seq_len(n_steps)
   )
 
+  str(A)
+  stop()
+
   # calculate fragility
   f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
-    fragilityRow(A[,,iw])
+    fragilityRowNormalized(A[,,iw])
   }, callback = function(iw) {
     sprintf("Calculating Fragility|Timewindow %s", iw)
   }))
@@ -383,7 +385,6 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     Electrode = repository$electrode_list,
     Step = seq_len(n_steps)
   )
-
 
   return(list(
     adj = A,
