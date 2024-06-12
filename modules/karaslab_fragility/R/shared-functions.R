@@ -281,8 +281,6 @@ fragilityRow <- function(A, nSearch = 100) {
     fragNorm[i] <- minNorm
   }
 
-
-
   return(fragNorm)
 }
 
@@ -341,8 +339,8 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     ## Coefficient matrix A (adjacency matrix)
     ## each column is coefficients from a linear regression
     ## formula: xtp1 = xt*A + E
-    # Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
-    Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
+    Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+    #Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
 
     R2 <- ridgeR2(xt,xtp1,Ai)
 
@@ -369,9 +367,6 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     Electrode = repository$electrode_list,
     Step = seq_len(n_steps)
   )
-
-  str(A)
-  stop()
 
   # calculate fragility
   f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){

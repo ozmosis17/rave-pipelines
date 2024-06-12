@@ -286,7 +286,9 @@ for(i in pts){
       lambda = 0.001,
       threshold_start = 0,
       threshold_end = 20,
-      threshold = 0.5
+      threshold = 0.5,
+      soz = soz,
+      sozc = sozc
     )
 
     # # display image results in R ---------------------------------------
@@ -327,8 +329,9 @@ for(i in pts){
       },{
         results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
 
-        env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
-        results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
+        # force evaluation
+        #env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
+        #results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
         # save fragility matrix results to csv
         raveio::safe_write_csv(
@@ -336,180 +339,71 @@ for(i in pts){
           file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_fragility.csv"))
         )
 
-        ####
-        n_tps <- length(results$repository$voltage$dimnames$Time)
-        n_elec <- length(electrodes)
-        t_window <- 250
-        t_step <- 125
-        n_steps <- floor((n_tps - t_window) / t_step) + 1
-        epoch_time_window <- fragility_pipeline$get_settings("epoch_time_window")
-        fs <- 1000
+        quantile_results <- frag_quantile(results$repository, results$adj_frag_info,
+                                          fragility_pipeline$get_settings("t_window"),
+                                          fragility_pipeline$get_settings("t_step"),
+                                          fragility_pipeline$get_settings("soz"),
+                                          fragility_pipeline$get_settings("sozc"))
 
-        fragmap <- results$adj_frag_info$frag
-        fragmap <- fragmap[as.character(c(soz,sozc)),]
-        stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
-        fplot_data <- expand.grid(Time = stimes, Electrode = elecnum)
-        fplot_data$Value <- c(t(fragmap))
-        titlepng=paste(subject_code,'Seizure',as.character(trial_num),sep=" ")
+        # fragility heatmaps
+        # no ranking
+        colorelec <- rep("black",length(c(fragility_pipeline$get_settings("soz"),
+                                          fragility_pipeline$get_settings("sozc"))))
+        colorelec[1:length(fragility_pipeline$get_settings("soz"))]="blue"
 
-        # without ranking
-        ploton <- TRUE
-        if(ploton==TRUE){
-          #plot organized fragility map with soz electrodes on bottom
-          ggplot(fplot_data, aes(x = Time, y = Electrode, fill = Value)) +
-            geom_tile() +
-            ggtitle(titlepng)+
-            labs(x = "Time (s)", y = "Electrode") +
-            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
-            theme_minimal() +
-            theme(
-              axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
-            )
-        }
+        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'No Rank',sep=" ")
 
-        f_ranked <- matrix(rank(fragmap), nrow(fragmap), ncol(fragmap))
-        attributes(f_ranked) <- attributes(fragmap)
-        f_ranked <- f_ranked/max(f_ranked)
+        ggplot(quantile_results$fplot_raw, aes(x = Time, y = Electrode, fill = Value)) +
+          geom_tile() +
+          ggtitle(titlepng)+
+          labs(x = "Time (s)", y = "Electrode") +
+          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
+          theme_minimal() +
+          theme(
+            axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+          )
+        norank_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_NoRank_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
+        ggsave(norank_image)
 
-        fplot_data$Value <- c(t(f_ranked))
-        titlepng=paste(subject_code,'Seizure',as.character(trial_num),sep=" ")
+        # ranking
+        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'Ranked',sep=" ")
 
-        # with ranking
-        ploton <- TRUE
-        if(ploton==TRUE){
-          #plot organized fragility map with soz electrodes on bottom
-          ggplot(fplot_data, aes(x = Time, y = Electrode, fill = Value)) +
-            geom_tile() +
-            ggtitle(titlepng)+
-            labs(x = "Time (s)", y = "Electrode") +
-            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
-            theme_minimal() +
-            theme(
-              axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
-            )
-        }
+        ggplot(quantile_results$fplot_ranked, aes(x = Time, y = Electrode, fill = Value)) +
+          geom_tile() +
+          ggtitle(titlepng)+
+          labs(x = "Time (s)", y = "Electrode") +
+          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
+          theme_minimal() +
+          theme(
+            axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+          )
+        ranked_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_Ranked_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
+        ggsave(ranked_image)
 
-        hmapsoz <- f_ranked[as.character(soz),]
-        hmapsozc <- f_ranked[as.character(sozc),]
+        # quantiles
+        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'Quantiles',sep=" ")
 
-        f90soz=quantile(hmapsoz, probs=c(0.9))
-        f90sozc=quantile(hmapsozc,probs=c(0.9))
-
-        quantilematrixsozsozc=matrix(0,20,length(stimes))
-        cmeansoz=c(1:length(stimes))*0
-        cmeansozc=c(1:length(stimes))*0
-        csdsoz=c(1:length(stimes))*0
-        csdsozc=c(1:length(stimes))*0
-
-        for(i in 1:length(stimes)){
-
-          colsoz=hmapsoz[,i]
-          colsozc=hmapsozc[,i]
-
-          meansoz=mean(colsoz)
-          sdsoz=sd(colsoz)
-          meansozc=mean(colsozc)
-          sdsozc=sd(colsozc)
-
-          cmeansoz[i]=meansoz
-          cmeansozc[i]=meansozc
-          csdsoz[i]=sdsoz
-          csdsozc[i]=sdsozc
-
-          f10colsoz<-quantile(colsoz,probs=c(0.1))
-          f20colsoz<-quantile(colsoz,probs=c(0.2))
-          f30colsoz<-quantile(colsoz,probs=c(0.3))
-          f40colsoz<-quantile(colsoz,probs=c(0.4))
-          f50colsoz<-quantile(colsoz,probs=c(0.5))
-          f60colsoz<-quantile(colsoz,probs=c(0.6))
-          f70colsoz<-quantile(colsoz,probs=c(0.7))
-          f80colsoz<-quantile(colsoz,probs=c(0.8))
-          f90colsoz<-quantile(colsoz,probs=c(0.9))
-          f100colsoz<-quantile(colsoz,probs=c(1.0))
-
-          f10colsozc<-quantile(colsozc,probs=c(0.1))
-          f20colsozc<-quantile(colsozc,probs=c(0.2))
-          f30colsozc<-quantile(colsozc,probs=c(0.3))
-          f40colsozc<-quantile(colsozc,probs=c(0.4))
-          f50colsozc<-quantile(colsozc,probs=c(0.5))
-          f60colsozc<-quantile(colsozc,probs=c(0.6))
-          f70colsozc<-quantile(colsozc,probs=c(0.7))
-          f80colsozc<-quantile(colsozc,probs=c(0.8))
-          f90colsozc<-quantile(colsozc,probs=c(0.9))
-          f100colsozc<-quantile(colsozc,probs=c(1.0))
-
-          quantilematrixsozsozc[1,i]=f10colsoz
-          quantilematrixsozsozc[2,i]=f20colsoz
-          quantilematrixsozsozc[3,i]=f30colsoz
-          quantilematrixsozsozc[4,i]=f40colsoz
-          quantilematrixsozsozc[5,i]=f50colsoz
-          quantilematrixsozsozc[6,i]=f60colsoz
-          quantilematrixsozsozc[7,i]=f70colsoz
-          quantilematrixsozsozc[8,i]=f80colsoz
-          quantilematrixsozsozc[9,i]=f90colsoz
-          quantilematrixsozsozc[10,i]=f100colsoz
-          quantilematrixsozsozc[11,i]=f10colsozc
-          quantilematrixsozsozc[12,i]=f20colsozc
-          quantilematrixsozsozc[13,i]=f30colsozc
-          quantilematrixsozsozc[14,i]=f40colsozc
-          quantilematrixsozsozc[15,i]=f50colsozc
-          quantilematrixsozsozc[16,i]=f60colsozc
-          quantilematrixsozsozc[17,i]=f70colsozc
-          quantilematrixsozsozc[18,i]=f80colsozc
-          quantilematrixsozsozc[19,i]=f90colsozc
-          quantilematrixsozsozc[20,i]=f100colsozc
-
-        }
-
-        quantilesname<-c('SOZ(10th)','SOZ(20th)','SOZ(30th)','SOZ(40th)','SOZ(50th)',
-                         'SOZ(60th)','SOZ(70th)','SOZ(80th)','SOZ(90th)','SOZ(100th)',
-                         'SOZc(10th)','SOZc(20th)','SOZc(30th)','SOZc(40th)','SOZc(50th)',
-                         'SOZc(60th)','SOZc(70th)','SOZc(80th)','SOZc(90th)','SOZc(100th)')
-        quantileplot<- expand.grid(Time = stimes, Stats=quantilesname)
-        quantileplot$Value <- c(t(quantilematrixsozsozc))
-
-        if(ploton==TRUE){
-
-          ggplot(quantileplot, aes(x = Time, y = Stats, fill = Value)) +
-            geom_tile() +
-            ggtitle(titlepng)+
-            labs(x = "Time (s)", y = "Statistic") +
-            scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
-            theme_minimal() +
-            theme(
-              axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
-            )
-
-          file=paste(path,subject_code,'/',subject_code,'_seizure',as.character(j),'_quantiles.png',sep="")
-          ggsave(file)
-        }
-        quantilesave=c()
-        quantilesave <- rbind(quantilesave,quantileplot$Value)
-
-        dimnames(quantilematrixsozsozc) <- list(
-          Quantile = quantilesname,
-          Time = stimes
-        )
+        ggplot(quantile_results$q_plot, aes(x = Time, y = Stats, fill = Value)) +
+          geom_tile() +
+          ggtitle(titlepng)+
+          labs(x = "Time (s)", y = "Statistic") +
+          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
+          theme_minimal() +
+          theme(
+            axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
+          )
+        q_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_Quantile_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
+        ggsave(q_image)
 
         raveio::safe_write_csv(
-          quantilematrixsozsozc,
-          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_fragilityquantile.csv"))
+          quantile_results$q_matrix,
+          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_quantile.csv"))
         )
 
         # print results to pdf
-        pdf_path <- file.path(export, paste0(subject_code,'_seizure',trial_num/2,'_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
+        pdf_path <- file.path(export, paste0(subject_code,'_seizure',trial_num/2,format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
         grDevices::pdf(pdf_path, width = 12, height = 7)
         par(mfrow=c(2,1),mar=rep(2,4))
-
-        # fragility heatmap
-        do.call(fragility_map_plot, c(results,
-                                      list(fragility_pipeline$get_settings("display_electrodes"),
-                                           fragility_pipeline$get_settings("sz_onset"),
-                                           elec_list = elec_list,
-                                           'sort_fmap' = 1,
-                                           'height' = 14,
-                                           threshold = fragility_pipeline$get_settings("threshold"))
-        ))
 
         # voltage reconstruction
         g <- do.call(voltage_recon_plot, c(results[1:2],
@@ -521,6 +415,17 @@ for(i in pts){
                                                 lambda = fragility_pipeline$get_settings("lambda"))
         ))
         print(g)
+
+        # old fragility heatmap
+        do.call(fragility_map_plot, c(results,
+                                      list(fragility_pipeline$get_settings("display_electrodes"),
+                                           fragility_pipeline$get_settings("sz_onset"),
+                                           elec_list = elec_list,
+                                           'sort_fmap' = 1,
+                                           'height' = 14,
+                                           threshold = fragility_pipeline$get_settings("threshold"))
+        ))
+
         grDevices::dev.off()
     })
 

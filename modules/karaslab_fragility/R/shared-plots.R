@@ -160,6 +160,123 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
   g
 }
 
+frag_quantile <- function(repository, adj_frag_info, t_window, t_step, soz, sozc){
+  n_tps <- length(repository$voltage$dimnames$Time)
+  n_elec <- length(repository$voltage$dimnames$Electrode)
+  n_steps <- floor((n_tps - t_window) / t_step) + 1
+  epoch_time_window <- repository$time_windows[[1]]
+  fs <- repository$sample_rate
+  elec_names <- repository$electrode_table$Label[match(c(soz,sozc), repository$electrode_table$Electrode)]
+
+  # create fragility map with soz electrodes separated from sozc electrodes
+  fragmap <- adj_frag_info$frag[as.character(c(soz,sozc)),]
+  stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
+
+  # raw fragility map
+  fplot_raw <- expand.grid(Time = stimes, Electrode = elec_names)
+  fplot_raw$Value <- c(t(fragmap))
+
+  # ranked fragility map
+  f_ranked <- matrix(rank(fragmap), nrow(fragmap), ncol(fragmap))
+  attributes(f_ranked) <- attributes(fragmap)
+  f_ranked <- f_ranked/max(f_ranked)
+  fplot_ranked <- expand.grid(Time = stimes, Electrode = elec_names)
+  fplot_ranked$Value <- c(t(f_ranked))
+
+  # create separate heatmaps for soz and sozc for quantile calcs
+  hmapsoz <- f_ranked[as.character(soz),]
+  hmapsozc <- f_ranked[as.character(sozc),]
+
+  #f90soz=quantile(hmapsoz, probs=c(0.9))
+  #f90sozc=quantile(hmapsozc,probs=c(0.9))
+  #interpretabilityratiosoz=f90soz/f90sozc
+
+  quantilematrixsozsozc=matrix(0,20,length(stimes))
+  cmeansoz=c(1:length(stimes))*0
+  cmeansozc=c(1:length(stimes))*0
+  csdsoz=c(1:length(stimes))*0
+  csdsozc=c(1:length(stimes))*0
+
+  for(i in 1:length(stimes)){
+
+    colsoz=hmapsoz[,i]
+    colsozc=hmapsozc[,i]
+
+    meansoz=mean(colsoz)
+    sdsoz=sd(colsoz)
+    meansozc=mean(colsozc)
+    sdsozc=sd(colsozc)
+
+    cmeansoz[i]=meansoz
+    cmeansozc[i]=meansozc
+    csdsoz[i]=sdsoz
+    csdsozc[i]=sdsozc
+
+    f10colsoz<-quantile(colsoz,probs=c(0.1))
+    f20colsoz<-quantile(colsoz,probs=c(0.2))
+    f30colsoz<-quantile(colsoz,probs=c(0.3))
+    f40colsoz<-quantile(colsoz,probs=c(0.4))
+    f50colsoz<-quantile(colsoz,probs=c(0.5))
+    f60colsoz<-quantile(colsoz,probs=c(0.6))
+    f70colsoz<-quantile(colsoz,probs=c(0.7))
+    f80colsoz<-quantile(colsoz,probs=c(0.8))
+    f90colsoz<-quantile(colsoz,probs=c(0.9))
+    f100colsoz<-quantile(colsoz,probs=c(1.0))
+
+    f10colsozc<-quantile(colsozc,probs=c(0.1))
+    f20colsozc<-quantile(colsozc,probs=c(0.2))
+    f30colsozc<-quantile(colsozc,probs=c(0.3))
+    f40colsozc<-quantile(colsozc,probs=c(0.4))
+    f50colsozc<-quantile(colsozc,probs=c(0.5))
+    f60colsozc<-quantile(colsozc,probs=c(0.6))
+    f70colsozc<-quantile(colsozc,probs=c(0.7))
+    f80colsozc<-quantile(colsozc,probs=c(0.8))
+    f90colsozc<-quantile(colsozc,probs=c(0.9))
+    f100colsozc<-quantile(colsozc,probs=c(1.0))
+
+    quantilematrixsozsozc[1,i]=f10colsoz
+    quantilematrixsozsozc[2,i]=f20colsoz
+    quantilematrixsozsozc[3,i]=f30colsoz
+    quantilematrixsozsozc[4,i]=f40colsoz
+    quantilematrixsozsozc[5,i]=f50colsoz
+    quantilematrixsozsozc[6,i]=f60colsoz
+    quantilematrixsozsozc[7,i]=f70colsoz
+    quantilematrixsozsozc[8,i]=f80colsoz
+    quantilematrixsozsozc[9,i]=f90colsoz
+    quantilematrixsozsozc[10,i]=f100colsoz
+    quantilematrixsozsozc[11,i]=f10colsozc
+    quantilematrixsozsozc[12,i]=f20colsozc
+    quantilematrixsozsozc[13,i]=f30colsozc
+    quantilematrixsozsozc[14,i]=f40colsozc
+    quantilematrixsozsozc[15,i]=f50colsozc
+    quantilematrixsozsozc[16,i]=f60colsozc
+    quantilematrixsozsozc[17,i]=f70colsozc
+    quantilematrixsozsozc[18,i]=f80colsozc
+    quantilematrixsozsozc[19,i]=f90colsozc
+    quantilematrixsozsozc[20,i]=f100colsozc
+
+  }
+
+  quantilesname<-c('SOZ(10th)','SOZ(20th)','SOZ(30th)','SOZ(40th)','SOZ(50th)',
+                   'SOZ(60th)','SOZ(70th)','SOZ(80th)','SOZ(90th)','SOZ(100th)',
+                   'SOZc(10th)','SOZc(20th)','SOZc(30th)','SOZc(40th)','SOZc(50th)',
+                   'SOZc(60th)','SOZc(70th)','SOZc(80th)','SOZc(90th)','SOZc(100th)')
+  quantileplot<- expand.grid(Time = stimes, Stats=quantilesname)
+  quantileplot$Value <- c(t(quantilematrixsozsozc))
+
+  dimnames(quantilematrixsozsozc) <- list(
+    Quantile = quantilesname,
+    Time = stimes
+  )
+
+  return(list(
+    fplot_raw = fplot_raw,
+    fplot_ranked = fplot_ranked,
+    q_matrix = quantilematrixsozsozc,
+    q_plot = quantileplot
+  ))
+}
+
 # y1 <- repository$voltage$data_list$e_1[]
 # y2 <- Fragrepository$voltage$data_list$e_1[]
 # y1 <- y1[1:1000,2]
