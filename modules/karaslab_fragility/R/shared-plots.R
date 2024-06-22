@@ -18,17 +18,17 @@ fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, displa
   x <- 1:dim(m)[2]
   m <- t(m[as.character(rev(y)),]) # rev to make display descending from top to bottom
 
-  attr(m, 'xlab') = 'Time (s)'
-  attr(m, 'ylab') = 'Electrode'
-  attr(m, 'zlab') = 'Fragility'
+  attr(m, "xlab") = "Time (s)"
+  attr(m, "ylab") = "Electrode"
+  attr(m, "zlab") = "Fragility"
 
   tp <- repository$voltage$dimnames$Time
 
-  if (!all(elec_list$Label == 'NoLabel')) {
+  if (!all(elec_list$Label == "NoLabel")) {
     elec_i <- match(elec_order, elec_list$Electrode)
-    y <- paste0(elec_list$Label[elec_i], '(', elec_order, ')')
+    y <- paste0(elec_list$Label[elec_i], "(", elec_order, ")")
     elec_i <- match(fsort, elec_list$Electrode)
-    f_list <- paste0(elec_list$Label[elec_i], '(', fsort, ')')
+    f_list <- paste0(elec_list$Label[elec_i], "(", fsort, ")")
   }
 
   # for electrode label spacing on y axis
@@ -49,7 +49,7 @@ fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, displa
 
   # convert threshold-identified electrodes from numbers to names
   threshold_elec_i <- as.numeric(threshold_elec$elecnames)
-  if (!all(elec_list$Label == 'NoLabel')) {
+  if (!all(elec_list$Label == "NoLabel")) {
     elec_i <- match(threshold_elec_i, elec_list$Electrode)
     threshold_elec_names <- paste0(elec_list$Label[elec_i], collapse = ", ")
   } else {
@@ -134,11 +134,11 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
     e <- Mod(AEigen$values)
     max(e)
   })
-  print(paste0('largest eigenvalue norm: ', max(unlist(me))))
+  print(paste0("largest eigenvalue norm: ", max(unlist(me))))
 
   # calculate mean squared error between y1 and y2
   mse <- mean((v_orig - v_recon[])^2)
-  print(paste0('MSE: ', mse))
+  print(paste0("MSE: ", mse))
 
   R2_percentile <- mean(apply(adj_frag_info$R2,2,quantile,percentile))
 
@@ -154,38 +154,36 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
                           R2_percentile,
                           "\n Largest eigenvalue norm: ", max(unlist(me)),
                           "\n MSE: ", mse)) +
-    scale_color_manual(values = c("original" = 'black', "reconstructed" = "red")) +
+    scale_color_manual(values = c("original" = "black", "reconstructed" = "red")) +
     ggtitle(paste0("Electrode ", elec_num, " Voltage Reconstruction"))
 
   g
 }
 
-frag_quantile <- function(repository, adj_frag_info, t_window, t_step, soz, sozc){
+frag_quantile <- function(repository, f, t_window, t_step, soz, sozc){
   n_tps <- length(repository$voltage$dimnames$Time)
   n_elec <- length(repository$voltage$dimnames$Electrode)
   n_steps <- floor((n_tps - t_window) / t_step) + 1
   epoch_time_window <- repository$time_windows[[1]]
   fs <- repository$sample_rate
-  elec_names <- repository$electrode_table$Label[match(c(soz,sozc), repository$electrode_table$Electrode)]
+  if(any(repository$electrode_table$Label == "NoLabel")) {
+    elec_names <- repository$electrode_table$Electrode[match(c(soz,sozc), repository$electrode_table$Electrode)]
+    elec_names <- as.character(elec_names)
+  } else {
+    elec_names <- repository$electrode_table$Label[match(c(soz,sozc), repository$electrode_table$Electrode)]
+  }
 
   # create fragility map with soz electrodes separated from sozc electrodes
-  fragmap <- adj_frag_info$frag[as.character(c(soz,sozc)),]
+  fmap <- f[as.character(c(soz,sozc)),]
   stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
 
   # raw fragility map
-  fplot_raw <- expand.grid(Time = stimes, Electrode = elec_names)
-  fplot_raw$Value <- c(t(fragmap))
-
-  # ranked fragility map
-  f_ranked <- matrix(rank(fragmap), nrow(fragmap), ncol(fragmap))
-  attributes(f_ranked) <- attributes(fragmap)
-  f_ranked <- f_ranked/max(f_ranked)
-  fplot_ranked <- expand.grid(Time = stimes, Electrode = elec_names)
-  fplot_ranked$Value <- c(t(f_ranked))
+  fplot <- expand.grid(Time = stimes, Electrode = elec_names)
+  fplot$Value <- c(t(fmap))
 
   # create separate heatmaps for soz and sozc for quantile calcs
-  hmapsoz <- f_ranked[as.character(soz),]
-  hmapsozc <- f_ranked[as.character(sozc),]
+  hmapsoz <- fmap[as.character(soz),]
+  hmapsozc <- fmap[as.character(sozc),]
 
   #f90soz=quantile(hmapsoz, probs=c(0.9))
   #f90sozc=quantile(hmapsozc,probs=c(0.9))
@@ -257,10 +255,10 @@ frag_quantile <- function(repository, adj_frag_info, t_window, t_step, soz, sozc
 
   }
 
-  quantilesname<-c('SOZ(10th)','SOZ(20th)','SOZ(30th)','SOZ(40th)','SOZ(50th)',
-                   'SOZ(60th)','SOZ(70th)','SOZ(80th)','SOZ(90th)','SOZ(100th)',
-                   'SOZc(10th)','SOZc(20th)','SOZc(30th)','SOZc(40th)','SOZc(50th)',
-                   'SOZc(60th)','SOZc(70th)','SOZc(80th)','SOZc(90th)','SOZc(100th)')
+  quantilesname<-c("SOZ(10th)","SOZ(20th)","SOZ(30th)","SOZ(40th)","SOZ(50th)",
+                   "SOZ(60th)","SOZ(70th)","SOZ(80th)","SOZ(90th)","SOZ(100th)",
+                   "SOZc(10th)","SOZc(20th)","SOZc(30th)","SOZc(40th)","SOZc(50th)",
+                   "SOZc(60th)","SOZc(70th)","SOZc(80th)","SOZc(90th)","SOZc(100th)")
   quantileplot<- expand.grid(Time = stimes, Stats=quantilesname)
   quantileplot$Value <- c(t(quantilematrixsozsozc))
 
@@ -270,11 +268,118 @@ frag_quantile <- function(repository, adj_frag_info, t_window, t_step, soz, sozc
   )
 
   return(list(
-    fplot_raw = fplot_raw,
-    fplot_ranked = fplot_ranked,
+    fplot = fplot,
     q_matrix = quantilematrixsozsozc,
     q_plot = quantileplot
   ))
+}
+
+mean_f_plot <- function(repository, f, soz, sozc) {
+  mean_f_soz <- rep(0,dim(f)[2])
+  mean_f_sozc <- rep(0,dim(f)[2])
+  se_f_soz <- rep(0,dim(f)[2])
+  se_f_sozc <- rep(0,dim(f)[2])
+  for (i in seq_len(dim(f)[2])){
+    mean_f_soz[i] <- mean(f[as.character(soz),i])
+    se_f_soz[i] <- sd(f[as.character(soz),i])/sqrt(length(soz))
+    mean_f_sozc[i] <- mean(f[as.character(sozc),i])
+    se_f_sozc[i] <- sd(f[as.character(sozc),i]/sqrt(length(sozc)))
+  }
+  return(list(
+    mean_f_soz = mean_f_soz,
+    mean_f_sozc = mean_f_sozc,
+    se_f_soz = se_f_soz,
+    se_f_sozc = se_f_sozc
+  ))
+}
+
+output_files <- function(repository,f,pipeline_settings,export,note) {
+
+  raveio::dir_create2(paste0(export,"/",note))
+
+  subject_code <- pipeline_settings$subject_code
+  if(pipeline_settings$project_name == "Retrostudy"){
+    sz_num <- pipeline_settings$trial_num/2
+  } else {
+    sz_num <- pipeline_settings$trial_num
+  }
+  t_window <- pipeline_settings$t_window
+  t_step <- pipeline_settings$t_step
+  soz <- pipeline_settings$soz
+  sozc <- pipeline_settings$sozc
+  sz_onset <- pipeline_settings$sz_onset
+  epoch_time_window <- pipeline_settings$epoch_time_window
+
+  # save fragility matrix results to csv
+  raveio::safe_write_csv(
+    f,
+    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_fragility_",note,".csv"))
+  )
+
+  quantile_results <- frag_quantile(repository, f, t_window, t_step, soz, sozc)
+
+  # fragility heatmap
+  colorelec <- rep("black",length(c(soz,sozc)))
+  colorelec[1:length(soz)]="blue"
+
+  titlepng=paste(subject_code,"Seizure",as.character(sz_num),note,sep=" ")
+
+  ggplot(quantile_results$fplot, aes(x = Time, y = Electrode, fill = Value)) +
+    geom_tile() +
+    ggtitle(titlepng)+
+    labs(x = "Time (s)", y = "Electrode") +
+    scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+    )
+  img <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_map_",note,".png")
+  ggsave(img)
+
+  # quantile
+  raveio::safe_write_csv(
+    quantile_results$q_matrix,
+    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_quantile_",note,".csv"))
+  )
+
+  # quantile map
+  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Quantiles",note,sep=" ")
+
+  ggplot(quantile_results$q_plot, aes(x = Time, y = Stats, fill = Value)) +
+    geom_tile() +
+    ggtitle(titlepng)+
+    labs(x = "Time (s)", y = "Statistic") +
+    scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
+    )
+  q_image <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_qmap_",note,".png")
+  ggsave(q_image)
+
+  # average f over time windows
+  mean_f <- mean_f_plot(repository,f,soz,sozc)
+
+  # calculate seizure onset timewindow
+  sz_onset_twindow <- (sz_onset - epoch_time_window[1]) * dim(f)[2] / (epoch_time_window[2] - epoch_time_window[1])
+
+  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Avg Fragility Over Time",note,sep=" ")
+
+  df <- data.frame(1:length(mean_f$mean_f_soz),mean_f)
+
+  ggplot(df, aes(1:length(mean_f_soz))) +
+    geom_line(aes(y=mean_f_soz, color = "SOZ +/- sem")) +
+    geom_line(aes(y=mean_f_sozc, color = "SOZc +/- sem")) +
+    geom_ribbon(aes(ymin = mean_f_soz - se_f_soz, ymax = mean_f_soz + se_f_soz), fill = "indianred3", alpha = 0.7) +
+    geom_ribbon(aes(ymin = mean_f_sozc - se_f_sozc, ymax = mean_f_sozc + se_f_sozc), fill = "grey30", alpha = 0.6) +
+    geom_vline(xintercept = sz_onset_twindow, color = "blue") +
+    scale_color_manual(values = c("SOZ +/- sem" = "red", "SOZc +/- sem" = "black")) +
+    labs(x = "Timewindow", y = "Average fragility per timewindow", color = "Legend") +
+    ggtitle(titlepng)
+
+  mean_plot <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_meanplot_",note,".png")
+  ggsave(mean_plot)
+
 }
 
 # y1 <- repository$voltage$data_list$e_1[]
@@ -286,7 +391,7 @@ frag_quantile <- function(repository, adj_frag_info, t_window, t_step, soz, sozc
 # ggplot2::ggplot(df, aes(timepoints)) +
 #   geom_line(aes(y=y1, color = "retrostudy")) +
 #   geom_line(aes(y=y2, color = "frag")) +
-#   scale_color_manual(values = c("retrostudy" = 'black', "frag" = "red"))
+#   scale_color_manual(values = c("retrostudy" = "black", "frag" = "red"))
 
 export_pdf <- function(expr, path, env = parent.frame(),
                        quoted = FALSE, width = 12, height = 7, useDingbats = FALSE, ...) {

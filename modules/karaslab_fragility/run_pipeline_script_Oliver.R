@@ -5,14 +5,12 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-#export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearchNoRank"
-#export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearchRanked"
-export_path <- "/Volumes/OFZ1_T7/karaslab/Results_FragilityLambdaSearchNoRank"
+export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearch"
 
 pts <- dipsaus::parse_svec("1-22")
 pipeline_xls <- read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/patient_data_all_fragility_clean.csv")
-pipeline_xls <- readxl::read_xlsx("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/FragilityEEGDataset_pipeline.xlsx")
-pipeline_xls$subject[1]
+#pipeline_xls <- readxl::read_xlsx("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/FragilityEEGDataset_pipeline.xlsx")
+pipeline_xls$subject[pts]
 
 # not in use
 # SOZ_table <- data.frame(
@@ -43,6 +41,12 @@ for(i in pts){
   soz <- dipsaus::parse_svec(pipeline_xls$SOZ[i])
   sozc <- electrodes[!(electrodes%in%soz)]
 
+  if(!all(c(soz,sozc) %in% electrodes)){
+    warning("Not all electrodes specified in soz are loaded! Will omit unloaded electrodes from soz.")
+    soz <- soz[soz %in% electrodes]
+    sozc <- sozc[sozc %in% electrodes]
+  }
+
   # display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
   # if(is.null(display)){
   #   display <- electrodes
@@ -55,7 +59,7 @@ for(i in pts){
 
   subject_check <- raveio::validate_subject(paste0(project,"/",subject_code),
                                             method = "basic", verbose = FALSE)
-  # subject_check$paths$data_path$valid
+  subject_check$paths$data_path$valid
 
   #HUP dataset
   # HUP_i <- 5
@@ -71,6 +75,8 @@ for(i in pts){
   # type <- tolower(HUPxls$implant[HUP_i])
   # import_format <- names(raveio::IMPORT_FORMATS)[3]
 
+  # preprocess patient if not already preprocessed
+  # if (!subject_check$paths$data_path$valid) {
   if (FALSE) {
     print("starting preprocessing")
     # Import subject from BIDS ----------------------------------------------
@@ -283,7 +289,7 @@ for(i in pts){
       t_window = 250,
       t_step = 125,
       sz_onset = 0,
-      lambda = 0.001,
+      lambda = FALSE,
       threshold_start = 0,
       threshold_end = 20,
       threshold = 0.5,
@@ -333,72 +339,11 @@ for(i in pts){
         #env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
         #results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
-        # save fragility matrix results to csv
-        raveio::safe_write_csv(
-          results$adj_frag_info$frag,
-          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_fragility.csv"))
-        )
+        # save unranked results
+        output_files(results$repository,results$adj_frag_info$frag_norank,fragility_pipeline$get_settings(),export,"norank")
 
-        quantile_results <- frag_quantile(results$repository, results$adj_frag_info,
-                                          fragility_pipeline$get_settings("t_window"),
-                                          fragility_pipeline$get_settings("t_step"),
-                                          fragility_pipeline$get_settings("soz"),
-                                          fragility_pipeline$get_settings("sozc"))
-
-        # fragility heatmaps
-        # no ranking
-        colorelec <- rep("black",length(c(fragility_pipeline$get_settings("soz"),
-                                          fragility_pipeline$get_settings("sozc"))))
-        colorelec[1:length(fragility_pipeline$get_settings("soz"))]="blue"
-
-        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'No Rank',sep=" ")
-
-        ggplot(quantile_results$fplot_raw, aes(x = Time, y = Electrode, fill = Value)) +
-          geom_tile() +
-          ggtitle(titlepng)+
-          labs(x = "Time (s)", y = "Electrode") +
-          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
-          theme_minimal() +
-          theme(
-            axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
-          )
-        norank_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_NoRank_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
-        ggsave(norank_image)
-
-        # ranking
-        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'Ranked',sep=" ")
-
-        ggplot(quantile_results$fplot_ranked, aes(x = Time, y = Electrode, fill = Value)) +
-          geom_tile() +
-          ggtitle(titlepng)+
-          labs(x = "Time (s)", y = "Electrode") +
-          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5)+  #
-          theme_minimal() +
-          theme(
-            axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
-          )
-        ranked_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_Ranked_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
-        ggsave(ranked_image)
-
-        # quantiles
-        titlepng=paste(subject_code,'Seizure',as.character(trial_num/2),'Quantiles',sep=" ")
-
-        ggplot(quantile_results$q_plot, aes(x = Time, y = Stats, fill = Value)) +
-          geom_tile() +
-          ggtitle(titlepng)+
-          labs(x = "Time (s)", y = "Statistic") +
-          scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
-          theme_minimal() +
-          theme(
-            axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
-          )
-        q_image <- paste0(export,"/",subject_code,'_seizure',trial_num/2,'_Quantile_',format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.png')
-        ggsave(q_image)
-
-        raveio::safe_write_csv(
-          quantile_results$q_matrix,
-          file.path(export, paste0(subject_code, "_seizure", trial_num/2,"_quantile.csv"))
-        )
+        # save ranked results
+        output_files(results$repository,results$adj_frag_info$frag,fragility_pipeline$get_settings(),export,"ranked")
 
         # print results to pdf
         pdf_path <- file.path(export, paste0(subject_code,'_seizure',trial_num/2,format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
@@ -478,7 +423,7 @@ raveio::safe_write_csv(
 # DIPSAUS DEBUG START
 # repository <- results$repository
 # adj_frag_info <- results$adj_frag_info
-# trial_num = 1
+# trial_num = 2
 # t_window = 250
 # t_step = 125
 # timepoints = 1:1000

@@ -339,8 +339,13 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     ## Coefficient matrix A (adjacency matrix)
     ## each column is coefficients from a linear regression
     ## formula: xtp1 = xt*A + E
-    Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
-    #Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
+    if (class(lambda) == "numeric") {
+      message(paste0("running with lambda = ", lambda))
+      Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+    } else if (class(lambda) == "logical") {
+      message("running lambda search")
+      Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
+    }
 
     R2 <- ridgeR2(xt,xtp1,Ai)
 
@@ -375,137 +380,148 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     sprintf("Calculating Fragility|Timewindow %s", iw)
   }))
   dim(f) <- c(n_elec, n_steps)
-  f_naked=f
+  f_naked <- f
   dimnames(f) <- list(
     Electrode = repository$electrode_list,
     Step = seq_len(n_steps)
   )
 
+  # ranked fragility map
+  f_rank <- matrix(rank(f), nrow(f), ncol(f))
+  attributes(f_rank) <- attributes(f)
+  f_rank <- f_rank/max(f_rank)
+
   return(list(
     adj = A,
-    frag = f,
+    frag_norank = f,
+    frag = f_rank,
     R2 = R2
   ))
 }
 
 
-calc_adj_frag_oliver <- function(repository, trial_num, t_window, t_step, lambda) {
-
-  n_tps <- length(repository$voltage$dimnames$Time)
-  n_elec <- length(repository$voltage$dimnames$Electrode)
-
-  # Number of steps
-  n_steps <- floor((n_tps - t_window) / t_step) + 1
-
-  # slice of data
-  arr <- filearray::filearray_load_or_create(
-    filebase = tempfile(),
-    dimension = c(n_tps, n_elec),
-    type = "float", mode = "readwrite", partition_size = 1L,
-
-    # if repository has changed, re-calculate
-    repository_signature = repository$signature,
-    t_step = t_step, t_window = t_window,
-    trial_num = trial_num,
-
-    on_missing = function(arr) {
-      arr$set_header("ready", value = FALSE)
-    }
-  )
-
-  # check if header `ready` is not TRUE
-  if(!isTRUE(arr$get_header("ready", FALSE))) {
-
-    loaded_electrodes <- repository$electrode_list
-    raveio::lapply_async(repository$voltage$data_list, function(v) {
-      e <- dimnames(v)$Electrode
-      idx_e <- loaded_electrodes == e
-
-      arr[,idx_e] <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
-
-      return()
-    })
-  }
-
-  signalScaling <- 10^floor(log10(max(arr[])))
-  arr[] <- arr[]/signalScaling
-
-  ## create adjacency array (array of adj matrices for each time window)
-  ## iw: The index of the window we are going to calculate fragility
-
-  res <- raveio::lapply_async(seq_len(n_steps), function(iw) {
-    ## Sample indices for the selected window
-    si <- seq_len(t_window-1) + (iw-1)*t_step
-    ## measurements at time point t
-    xt <- arr[si,]
-    ## measurements at time point t plus 1
-    xtp1 <- arr[si + 1,]
-
-    ## Coefficient matrix A (adjacency matrix)
-    ## each column is coefficients from a linear regression
-    ## formula: xtp1 = xt*A + E
-    # Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
-    Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
-
-    R2 <- ridgeR2(xt,xtp1,Ai)
-
-    return(list(Ai = Ai, R2 = R2))
-  }, callback = function(iw) {
-    sprintf("Generating Adjacency Matrices|Timewindow %s", iw)
-  })
-
-  A <- unlist(raveio::lapply_async(res, function(w){
-    w$Ai
-  }))
-  dim(A) <- c(n_elec, n_elec, n_steps)
-  dimnames(A) <- list(
-    Electrode1 = repository$electrode_list,
-    Electrode2 = repository$electrode_list,
-    Step = seq_len(n_steps)
-  )
-
-  R2 <- unlist(raveio::lapply_async(res, function(w){
-    w$R2
-  }))
-  dim(R2) <- c(n_elec, n_steps)
-  dimnames(R2) <- list(
-    Electrode = repository$electrode_list,
-    Step = seq_len(n_steps)
-  )
-
-  # calculate fragility
-  f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
-    fragilityRow(A[,,iw])
-  }, callback = function(iw) {
-    sprintf("Calculating Fragility|Timewindow %s", iw)
-  }))
-  dim(f) <- c(n_elec, n_steps)
-  f_naked=f
-  dimnames(f) <- list(
-    Electrode = repository$electrode_list,
-    Step = seq_len(n_steps)
-  )
-
-  ## use ranking to increase contrast
-  f_contrast <- matrix(rank(f), nrow(f), ncol(f))
-  attributes(f_contrast) <- attributes(f)
-
-  # scale fragility values from -1 to 1 with 1 being most fragile
-
-  # normalize, for each column (margin=2L)
-  f_norm <- apply(f_contrast, 2, function(f_col) {
-    max_f <- max(f_col)
-    min_f <- min(f_col)
-    2.0 * (f_col - min_f) / (max_f - min_f) - 1.0 # normalize from -1 to 1
-    #(f_col - min_f) / (max_f - min_f) # normalize from 0 to 1
-  })
-
-  return(list(
-    adj = A,
-    frag = f_norm,
-    R2 = R2
-  ))
-}
+# calc_adj_frag_oliver <- function(repository, trial_num, t_window, t_step, lambda) {
+#
+#   n_tps <- length(repository$voltage$dimnames$Time)
+#   n_elec <- length(repository$voltage$dimnames$Electrode)
+#
+#   # Number of steps
+#   n_steps <- floor((n_tps - t_window) / t_step) + 1
+#
+#   # slice of data
+#   arr <- filearray::filearray_load_or_create(
+#     filebase = tempfile(),
+#     dimension = c(n_tps, n_elec),
+#     type = "float", mode = "readwrite", partition_size = 1L,
+#
+#     # if repository has changed, re-calculate
+#     repository_signature = repository$signature,
+#     t_step = t_step, t_window = t_window,
+#     trial_num = trial_num,
+#
+#     on_missing = function(arr) {
+#       arr$set_header("ready", value = FALSE)
+#     }
+#   )
+#
+#   # check if header `ready` is not TRUE
+#   if(!isTRUE(arr$get_header("ready", FALSE))) {
+#
+#     loaded_electrodes <- repository$electrode_list
+#     raveio::lapply_async(repository$voltage$data_list, function(v) {
+#       e <- dimnames(v)$Electrode
+#       idx_e <- loaded_electrodes == e
+#
+#       arr[,idx_e] <- v[, trial_num, 1, drop = TRUE, dimnames = NULL]
+#
+#       return()
+#     })
+#   }
+#
+#   signalScaling <- 10^floor(log10(max(arr[])))
+#   arr[] <- arr[]/signalScaling
+#
+#   ## create adjacency array (array of adj matrices for each time window)
+#   ## iw: The index of the window we are going to calculate fragility
+#
+#   res <- raveio::lapply_async(seq_len(n_steps), function(iw) {
+#     ## Sample indices for the selected window
+#     si <- seq_len(t_window-1) + (iw-1)*t_step
+#     ## measurements at time point t
+#     xt <- arr[si,]
+#     ## measurements at time point t plus 1
+#     xtp1 <- arr[si + 1,]
+#
+#     ## Coefficient matrix A (adjacency matrix)
+#     ## each column is coefficients from a linear regression
+#     ## formula: xtp1 = xt*A + E
+#     if (class(lambda) == "numeric") {
+#       message(paste0("running with lambda = ", lambda))
+#       Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
+#     } else if (class(lambda) == "logical") {
+#       message("running lambda search")
+#       Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
+#     }
+#
+#     R2 <- ridgeR2(xt,xtp1,Ai)
+#
+#     return(list(Ai = Ai, R2 = R2))
+#   }, callback = function(iw) {
+#     sprintf("Generating Adjacency Matrices|Timewindow %s", iw)
+#   })
+#
+#   A <- unlist(raveio::lapply_async(res, function(w){
+#     w$Ai
+#   }))
+#   dim(A) <- c(n_elec, n_elec, n_steps)
+#   dimnames(A) <- list(
+#     Electrode1 = repository$electrode_list,
+#     Electrode2 = repository$electrode_list,
+#     Step = seq_len(n_steps)
+#   )
+#
+#   R2 <- unlist(raveio::lapply_async(res, function(w){
+#     w$R2
+#   }))
+#   dim(R2) <- c(n_elec, n_steps)
+#   dimnames(R2) <- list(
+#     Electrode = repository$electrode_list,
+#     Step = seq_len(n_steps)
+#   )
+#
+#   # calculate fragility
+#   f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
+#     fragilityRow(A[,,iw])
+#   }, callback = function(iw) {
+#     sprintf("Calculating Fragility|Timewindow %s", iw)
+#   }))
+#   dim(f) <- c(n_elec, n_steps)
+#   f_naked=f
+#   dimnames(f) <- list(
+#     Electrode = repository$electrode_list,
+#     Step = seq_len(n_steps)
+#   )
+#
+#   ## use ranking to increase contrast
+#   f_contrast <- matrix(rank(f), nrow(f), ncol(f))
+#   attributes(f_contrast) <- attributes(f)
+#
+#   # scale fragility values from -1 to 1 with 1 being most fragile
+#
+#   # normalize, for each column (margin=2L)
+#   f_norm <- apply(f_contrast, 2, function(f_col) {
+#     max_f <- max(f_col)
+#     min_f <- min(f_col)
+#     2.0 * (f_col - min_f) / (max_f - min_f) - 1.0 # normalize from -1 to 1
+#     #(f_col - min_f) / (max_f - min_f) # normalize from 0 to 1
+#   })
+#
+#   return(list(
+#     adj = A,
+#     frag = f_norm,
+#     R2 = R2
+#   ))
+# }
 
 threshold_fragility <- function(repository, adj_frag_info, t_step, threshold_start, threshold_end, threshold = 0.5) {
   n_windows <- dim(adj_frag_info$adj)[3]
