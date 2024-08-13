@@ -274,7 +274,7 @@ frag_quantile <- function(repository, f, t_window, t_step, soz, sozc){
   ))
 }
 
-mean_f_plot <- function(f, soz, sozc) {
+mean_f_plot <- function(repository, f, soz, sozc) {
   mean_f_soz <- rep(0,dim(f)[2])
   mean_f_sozc <- rep(0,dim(f)[2])
   se_f_soz <- rep(0,dim(f)[2])
@@ -298,11 +298,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
   raveio::dir_create2(paste0(export,"/",note))
 
   subject_code <- pipeline_settings$subject_code
-  if(pipeline_settings$project_name == "Retrostudy"){
-    sz_num <- pipeline_settings$trial_num/2
-  } else {
-    sz_num <- pipeline_settings$trial_num
-  }
+  sz_num <- pipeline_settings$condition
   t_window <- pipeline_settings$t_window
   t_step <- pipeline_settings$t_step
   soz <- pipeline_settings$soz
@@ -313,7 +309,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
   # save fragility matrix results to csv
   raveio::safe_write_csv(
     f,
-    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_fragility_",note,".csv"))
+    file.path(export, paste0(note,"/",subject_code, "_", sz_num,"_fragility_",note,".csv"))
   )
 
   quantile_results <- frag_quantile(repository, f, t_window, t_step, soz, sozc)
@@ -322,7 +318,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
   colorelec <- rep("black",length(c(soz,sozc)))
   colorelec[1:length(soz)]="blue"
 
-  titlepng=paste(subject_code,"Seizure",as.character(sz_num),note,sep=" ")
+  titlepng=paste(subject_code,as.character(sz_num),note,sep=" ")
 
   ggplot(quantile_results$fplot, aes(x = Time, y = Electrode, fill = Value)) +
     geom_tile() +
@@ -333,17 +329,17 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
     theme(
       axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
     )
-  img <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_map_",note,".png")
+  img <- paste0(export,"/",note,"/",subject_code,"_",sz_num,"_map_",note,".png")
   ggsave(img)
 
   # quantile
   raveio::safe_write_csv(
     quantile_results$q_matrix,
-    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_quantile_",note,".csv"))
+    file.path(export, paste0(note,"/",subject_code, "_", sz_num,"_quantile_",note,".csv"))
   )
 
   # quantile map
-  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Quantiles",note,sep=" ")
+  titlepng=paste(subject_code,as.character(sz_num),"Quantiles",note,sep=" ")
 
   ggplot(quantile_results$q_plot, aes(x = Time, y = Stats, fill = Value)) +
     geom_tile() +
@@ -354,7 +350,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
     theme(
       axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
     )
-  q_image <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_qmap_",note,".png")
+  q_image <- paste0(export,"/",note,"/",subject_code,"_",sz_num,"_qmap_",note,".png")
   ggsave(q_image)
 
   # average f over time windows
@@ -377,7 +373,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
     labs(x = "Timewindow", y = "Average fragility per timewindow", color = "Legend") +
     ggtitle(titlepng)
 
-  mean_plot <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_meanplot_",note,".png")
+  mean_plot <- paste0(export,"/",note,"/",subject_code,"_",sz_num,"_meanplot_",note,".png")
   ggsave(mean_plot)
 
   line_plot_df <- data.frame(mean_f,attr(quantile_results$q_matrix, "dimnames")$Time)
@@ -385,7 +381,7 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
 
   raveio::safe_write_csv(
     line_plot_df,
-    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_meandata_",note,".csv"))
+    file.path(export, paste0(note,"/",subject_code, "_", sz_num,"_meandata_",note,".csv"))
   )
 }
 

@@ -5,7 +5,7 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-export_path <- "/Volumes/bigbrain/Fragility2024/Results_FragilityLambdaSearch"
+export_path <- "/Volumes/bigbrain/Fragility2024/Results_NIHFragiliity"
 
 pts <- dipsaus::parse_svec("94-102,131-139")
 pipeline_xls <- read.csv("/Volumes/bigbrain/Multipatient/patient_data_all_rev.csv")
@@ -94,6 +94,7 @@ for(i in pts){
     reference_name = reference_name,
     load_electrodes = electrodes,
     display_electrodes = display,
+    condition = condition,
     trial_num = trial_num,
     t_window = 250,
     t_step = 125,
@@ -139,7 +140,7 @@ for(i in pts){
   tryCatch(
     error = function(e){
       if (file.exists(export)) {
-        file.create(file.path(export, paste0(subject_code,"_sz",trial_num/2,"_ERROR")))
+        file.create(file.path(export, paste0(subject_code,"_",fragility_pipeline$get_settings("condition"),"_ERROR")))
       }
     },{
       results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
@@ -155,7 +156,7 @@ for(i in pts){
       output_files(results$repository,results$adj_frag_info$frag,fragility_pipeline$get_settings(),export,"ranked")
 
       # print results to pdf
-      pdf_path <- file.path(export, paste0(subject_code,'_seizure',trial_num/2,"_",format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
+      pdf_path <- file.path(export, paste0(subject_code,'_',fragility_pipeline$get_settings("condition"),"_",format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
       grDevices::pdf(pdf_path, width = 12, height = 7)
       par(mfrow=c(2,1),mar=rep(2,4))
 
