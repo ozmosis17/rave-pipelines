@@ -274,7 +274,7 @@ frag_quantile <- function(repository, f, t_window, t_step, soz, sozc){
   ))
 }
 
-mean_f_plot <- function(repository, f, soz, sozc) {
+mean_f_plot <- function(f, soz, sozc) {
   mean_f_soz <- rep(0,dim(f)[2])
   mean_f_sozc <- rep(0,dim(f)[2])
   se_f_soz <- rep(0,dim(f)[2])
@@ -380,6 +380,13 @@ output_files <- function(repository,f,pipeline_settings,export,note) {
   mean_plot <- paste0(export,"/",note,"/",subject_code,"_seizure",sz_num,"_meanplot_",note,".png")
   ggsave(mean_plot)
 
+  line_plot_df <- data.frame(mean_f,attr(quantile_results$q_matrix, "dimnames")$Time)
+  names(line_plot_df)[5] <- "time"
+
+  raveio::safe_write_csv(
+    line_plot_df,
+    file.path(export, paste0(note,"/",subject_code, "_seizure", sz_num,"_meandata_",note,".csv"))
+  )
 }
 
 # y1 <- repository$voltage$data_list$e_1[]
