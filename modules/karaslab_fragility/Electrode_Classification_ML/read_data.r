@@ -1,12 +1,5 @@
 library(tidyverse)
 library(glue)
-library(ggcorrplot)
-library(corrplot)
-library(pracma)
-library(stats)
-library(h2o)
-library(signal)
-
 # Helper Functions
 convert_range_to_vector <- function(range_string) {
   # Remove any whitespace
@@ -91,11 +84,11 @@ nanpow2db <- function(y){
 pts <- dipsaus::parse_svec("1-42,50-60")
 # Read patient key data
 patient_key <-
-    read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/rave-pipelines/modules/karaslab_fragility/Outcome_Classification_ML/patient_data_all_rev.csv", header = TRUE, stringsAsFactors = FALSE)|>
-    mutate(
-      condition = gsub("\\s.*", "", condition)
-    )|>
-    tibble()
+  read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/rave-pipelines/modules/karaslab_fragility/Outcome_Classification_ML/patient_data_all_rev.csv", header = TRUE, stringsAsFactors = FALSE)|>
+  mutate(
+    condition = gsub("\\s.*", "", condition)
+  )|>
+  tibble()
 
 patient_key <- patient_key[pts,]
 patient_key$subject_code
@@ -117,24 +110,21 @@ for (subject_code in unique(patient_key$subject_code)) {
 }
 csv_files
 
-quant_csv_files <- csv_files[grepl("quantile",csv_files)]
-quant_csv_files
-
-# Get list of CSV files in each directory
-# csv_files_list <- lapply(directories, function(directory) {
-#   list.files(directory, pattern = "\\.csv$", full.names = TRUE)
-# })
+frag_csv_files <- csv_files[grepl("fragility",csv_files)]
+frag_csv_files
 
 # Initialize an empty list to store dataframes
 all_dataframes <- list()
 all_dataframes_annotation <- list()
 
 idx <- 1
-for (file in quant_csv_files) {
+# Loop through each list of CSV files
+
+for (file in frag_csv_files) {
   # Extract patient code and condition from file name
   file_name <- basename(file)
   patient_code <- gsub("_.*", "", file_name)
-  cnd <- gsub(".*_", "", gsub("_quantile_norank.csv", "", file_name))
+  cnd <- gsub(".*_", "", gsub("_fragility_norank.csv", "", file_name))
 
   # convert "seizure" in file name to "sz" condition name
   cnd <- gsub("seizure","sz",cnd)
@@ -145,9 +135,8 @@ for (file in quant_csv_files) {
     next
   }
 
-
   # Read CSV file into a dataframe
-  df <- tibble(read.csv(file))|>dplyr::select(-X)
+  df <- tibble(read.csv(file))|>select(-X)
 
   # Add patient code, condition, and frequency as columns
   all_dataframes_annotation[[idx]] <-
@@ -177,86 +166,53 @@ if(nrow(non_exist_patient)!=0){
   patient_key <- dplyr::filter(patient_key, !(subject_code %in% non_exist_patient$subject_code & condition %in% non_exist_patient$condition))
 }
 
-
-
 all_dataframes_annotation2 <-
-  all_dataframes_annotation|>
+  all_dataframes_annotation |>
   left_join(
     patient_key,
     by = c("patient_code" = "subject_code",
-          "condition" = "condition")
-          )
+           "condition" = "condition")
+  )
+
 
 ## find out the number of readings for each electrode
-times <- lapply(all_dataframes, function(x) as.numeric(gsub("^\\.","\\-",gsub("^X", "", colnames(x)))))
+times <- lapply(all_dataframes, function(x) as.numeric(gsub("^X", "", colnames(x))))
+minNumReadings <- min(sapply(times, length))
 
-# identify patient with lowest sample rate
-sapply(times,length)
-minNumReadings_i <- which.min(sapply(times, length))
-minNumReadings <- all_dataframes[[minNumReadings_i]]
-
-# Initialize patient_data dataframe
+# Initialize patient_data dataframe with frequency column
 patient_data <- list()
 for(i in seq_len(nrow(all_dataframes_annotation2))){
       patient <- all_dataframes_annotation2$patient_code[i]
       condition <- all_dataframes_annotation2$condition[i]
-      # truncate data to match lowest sample rate patient
-      #print(i)
-      data_over_time_per_elec <- all_dataframes[[i]][, colnames(minNumReadings)]
-
+      ## readings are limited to the last minNumReadings readings
+      idx <- rev(rev(seq_len(ncol(all_dataframes[[i]])))[1:minNumReadings])
+      data_over_time_per_elec <- all_dataframes[[i]][, idx]
       colnames(data_over_time_per_elec) <- paste0("X", seq_len(ncol(data_over_time_per_elec)))
 
-      # Create the new column with labels
-      data_over_time_per_elec <- data_over_time_per_elec %>%
-        mutate(label = c(paste0("resect_", seq(10, 100, by=10)), paste0("other_", seq(10, 100, by=10))))
+      # Extract range data for electrodes, SOZ and Resect
+      electrodes <- all_dataframes_annotation2$load_electrodes[i]|>
+        convert_range_to_vector()
 
-      # Reshape data to a long format
-      data_long <- data_over_time_per_elec %>%
-        mutate(id = row_number()) %>%
-        pivot_longer(cols = -c(id, label), names_to = "variable", values_to = "value")
+      if(length(electrodes)==0){
+        next
+      }
+      resect <- all_dataframes_annotation2$Resect[i]|>
+        convert_range_to_vector()
+      soz <- all_dataframes_annotation2$SOZ[i]|>
+        convert_range_to_vector()
 
-      # Separate resect and other data
-      resect_data <- data_long %>% dplyr::filter(grepl("resect", label))
-      other_data <- data_long %>% dplyr::filter(grepl("other", label))
-
-      # Ensure ordering for subtraction
-      resect_data <- resect_data %>% arrange(id, label)
-      other_data <- other_data %>% arrange(id, label)
-
-      # changed from 0 to 1
-      # 1 to 10 is good
-      resect_data <- resect_data %>%
-        mutate(value = scales::rescale(value, to = c(1, 10)))
-
-      other_data <- other_data %>%
-        mutate(value = scales::rescale(value, to = c(1, 10)))
-
-      divide_data <- resect_data %>%
-        mutate(value = value / other_data$value) %>%
-        mutate(label = sub("divide_", "", label))
-
-      divide_data <- resect_data %>%
-        mutate(value = value / other_data$value) %>%
-        mutate(label = sub("divide_", "", label)) %>%
-        mutate(value = if_else(is.finite(value), value, 0))
-
-      divide_data <- divide_data %>%
-        mutate(across(where(is.numeric), ~ if_else(is.finite(.), ., 0)))
-
-      # Remove old rows and combine the new results
-      final_data <- data_long %>%
-        dplyr::filter(!label %in% c(resect_data$label, other_data$label)) %>%
-        bind_rows(divide_data) %>%
-        arrange(id) %>%
-        pivot_wider(names_from = variable, values_from = value, id_cols = c(id, label))
-
-      # Optionally drop the 'id' column if it was just for tracking
-      data_over_time_per_elec <- final_data %>%
-        dplyr::select(-id)
+      # Create logical vectors indicating whether each electrode is in SOZ or Resect
+      resect <- ifelse(electrodes %in% resect, 1, 0)
+      soz <- ifelse(electrodes %in% soz, 1, 0)
+      length(resect)
+      dim(data_over_time_per_elec)
 
       dt <- tibble(
         patient_code = patient,
         condition = condition,
+        electrode = electrodes,
+        resect = resect,
+        soz = soz
       )|>
       bind_cols(data_over_time_per_elec)
 
@@ -264,6 +220,7 @@ for(i in seq_len(nrow(all_dataframes_annotation2))){
 }
 
 patient_data <- do.call(rbind, patient_data)
+
 
 Positive <- c("subpt01", "subpt2", "subpt3", "subpt8", "subpt11", "subpt13",
               "subpt17", "subpt15", "subpt16", "subummc002", "subummc005", "subummc009",
@@ -274,43 +231,16 @@ Negative <- c("subpt6", "subpt7", "subpt10", "subpt12", "subpt14", "subjh101", "
 patient_data$outcome <- ifelse(patient_data$patient_code %in% Positive, 1,
                                ifelse(patient_data$patient_code %in% Negative, 0, NA))
 
-## make the table wide format
-value_columns <- paste0("X", seq_len(length(minNumReadings)))
+# Convert resect to factor
+patient_data$resect <- as.factor(patient_data$resect)
 
-long_data <- patient_data %>%
-  pivot_longer(
-    cols = starts_with("X"),
-    names_to = "Measurement_ID",
-    values_to = "Measurement_Value"
-  )
+# Only Seizure Free
+patient_data_not_sz_free <- patient_data[patient_data$outcome==0, ]
+patient_data <- patient_data[patient_data$outcome==1, ]
 
-final_data <- long_data %>%
-  pivot_wider(
-    id_cols = c("patient_code", "condition", "outcome"),
-    names_from = "label",
-    values_from = "Measurement_Value",
-    values_fn = list(Measurement_Value = mean)
-  )
+dt_final <- patient_data
 
-# final_data_scaled <- final_data %>%
-#   mutate(across(4:ncol(final_data), scale))
-#
-# remove_attributes <- function(x) {
-#   attributes(x) <- NULL
-#   x
-# }
-#
-# # Assuming your data is in a tibble called final_data_scaled
-# final_data_scaled <- final_data_scaled %>%
-#   mutate(across(where(is.numeric), remove_attributes))
-#
-final_data<- final_data %>%
-  dplyr::select_if(~ !any(is.na(.)))
+dt_final_not_sz <- patient_data_not_sz_free
 
-final_data <- final_data %>%
-  dplyr::select_if(~ !any(is.infinite(.)))
 
-dt_final <- final_data
-
-dt_final <- dplyr::filter(dt_final, !patient_code %in% c("subummc002","subummc005","subummc009"))
 
