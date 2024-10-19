@@ -40,19 +40,33 @@ module_server <- function(input, output, session, ...){
       #   "display_electrodes", "trial_num", "t_window", "t_step", "sz_onset"
       # ))
 
-      trial_num <- which(input$trial_num == component_container$data$trial_choices)
-      t_step <- input$t_window * (as.numeric(input$t_step_percentage) / 100)
+      display <- dipsaus::parse_svec(input$display_electrodes)
+
+      trial_num <- which(input$condition == component_container$data$trial_choices)
+      t_step <- input$t_window * (as.numeric(gsub("%","",input$t_step_percentage)) / 100)
+      if (input$lambda == "") {
+        lambda <- FALSE
+      } else {
+        lambda <- as.numeric(input$lambda)
+      }
+
+      electrodes <- component_container$data$repository$electrode_table$Electrode
+
+      sozc <- electrodes[!(electrodes%in%dipsaus::parse_svec(input$soz))]
 
       pipeline$set_settings(
-        display_electrodes = dipsaus::parse_svec(input$display_electrodes),
+        display_electrodes = display,
+        condition = input$condition,
         trial_num = trial_num,
         t_window = input$t_window,
         t_step = t_step,
         sz_onset = input$sz_onset,
-        lambda = input$lambda,
-        threshold_start = input$threshold_limits[1],
-        threshold_end = input$threshold_limits[2],
-        threshold = input$threshold
+        lambda = lambda,
+        #threshold_start = input$threshold_limits[1],
+        #threshold_end = input$threshold_limits[2],
+        #threshold = input$threshold,
+        soz = dipsaus::parse_svec(input$soz),
+        sozc = sozc
       )
 
       #' Run pipeline without blocking the main session
@@ -75,8 +89,7 @@ module_server <- function(input, output, session, ...){
         # check_interval = 0.1,
         # shortcut = TRUE,
         names = c(
-          "adj_frag_info",
-          "threshold_elec"
+          "adj_frag_info"
         )
       )
 
@@ -155,32 +168,38 @@ module_server <- function(input, output, session, ...){
       # Update the trial selection input
       shiny::updateSelectInput(
         session = session,
-        inputId = "trial_num",
+        inputId = "condition",
         choices = component_container$data$trial_choices,
-        selected = component_container$data$trial_choices[pipeline$get_settings("trial_num")]
+        selected = pipeline$get_settings("condition")
+      )
+
+      shiny::updateTextInput(
+        session = session,
+        inputId = "soz",
+        value = dipsaus::deparse_svec(pipeline$get_settings("soz"))
       )
 
       shiny::updateTextInput(
         session = session,
         inputId = "display_electrodes",
-        value = dipsaus::deparse_svec(component_container$data$repository$electrode_table$Electrode)
+        value = dipsaus::deparse_svec(component_container$data$repository$electrode_list)
       )
 
       shiny::updateSliderInput(
         session = session,
         inputId = "sz_onset",
-        min = component_container$repository$time_windows[[1]][1],
-        max = component_container$repository$time_windows[[1]][2],
+        min = component_container$data$repository$time_windows[[1]][1],
+        max = component_container$data$repository$time_windows[[1]][2],
         value = 0
       )
 
-      shiny::updateSliderInput(
-        session = session,
-        inputId = "threshold_limits",
-        min = component_container$repository$time_windows[[1]][1],
-        max = component_container$repository$time_windows[[1]][2],
-        value = c(0,component_container$repository$time_windows[[1]][2])
-      )
+      # shiny::updateSliderInput(
+      #   session = session,
+      #   inputId = "threshold_limits",
+      #   min = component_container$data$repository$time_windows[[1]][1],
+      #   max = component_container$data$repository$time_windows[[1]][2],
+      #   value = c(0,component_container$data$repository$time_windows[[1]][2])
+      # )
 
       # Reset outputs
       # shidashi::reset_output("collapse_over_trial")
@@ -217,14 +236,19 @@ module_server <- function(input, output, session, ...){
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      do.call(voltage_recon_plot, c(results[1:2],
-                                    list(pipeline$get_settings("t_window"),
-                                         pipeline$get_settings("t_step"),
-                                         pipeline$get_settings("trial_num"),
-                                         timepoints = 1:1000,
-                                         elec_num = 1,
-                                         lambda = pipeline$get_settings("lambda"))
-      ))
+      # do.call(voltage_recon_plot, c(results[1:2],
+      #                               list(pipeline$get_settings("t_window"),
+      #                                    pipeline$get_settings("t_step"),
+      #                                    pipeline$get_settings("trial_num"),
+      #                                    timepoints = 1:1000,
+      #                                    elec_num = 1,
+      #                                    lambda = pipeline$get_settings("lambda"))
+
+      # ))
+
+      display_electrodes <- dipsaus::parse_svec(input$display_electrodes)
+
+      voltage_plot(results$repository, results$adj_frag_info, display_electrodes)
     })
   )
 
@@ -247,15 +271,85 @@ module_server <- function(input, output, session, ...){
         )
       )
 
-      results <- pipeline$read(var_names = c("repository","adj_frag_info","threshold_elec"))
+      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      do.call(fragility_map_plot, c(results,
-                                    list(pipeline$get_settings("display_electrodes"),
-                                         pipeline$get_settings("sz_onset"),
-                                         elec_list = pipeline$read()$subject$get_electrode_table(),
-                                         'sort_fmap' = 1,
-                                         'height' = 14)
-      ))
+      if(input$ranked){
+        note <- "ranked"
+        f <- results$adj_frag_info$frag_ranked
+      } else {
+        note <- "unranked"
+        f <- results$adj_frag_info$frag
+      }
+
+      plots <- fragility_map_plots(results$repository, f,
+                                   pipeline$get_settings(),note,
+                                   dipsaus::parse_svec(input$display_electrodes),
+                                   input$sz_onset, input$thresholding,
+                                   as.numeric(unlist(strsplit(input$buckets, ","))))
+
+      plots$frag_heatmap
+    })
+  )
+
+  ravedash::register_output(
+    outputId = "mean_f_plot",
+    output_type = "image",
+    title = "Average Fragility Over Time",
+    shiny::renderPlot({
+      shiny::validate(
+        shiny::need(
+          length(local_reactives$update_outputs) &&
+            !isFALSE(local_reactives$update_outputs),
+          message = "Please run the module first"
+        )
+      )
+      shiny::validate(
+        shiny::need(
+          isTRUE(local_data$results$valid),
+          message = "One or more errors while executing pipeline. Please check the notification."
+        )
+      )
+
+      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+
+      plots <- fragility_map_plots(results$repository, results$adj_frag_info$frag,
+                                   pipeline$get_settings(),"unranked",
+                                   dipsaus::parse_svec(input$display_electrodes),
+                                   input$sz_onset, input$thresholding,
+                                   as.numeric(unlist(strsplit(input$buckets, ","))))
+
+      plots$mean_f_over_time
+    })
+  )
+
+  ravedash::register_output(
+    outputId = "q_plot",
+    output_type = "image",
+    title = "Quantile Plot",
+    shiny::renderPlot({
+      shiny::validate(
+        shiny::need(
+          length(local_reactives$update_outputs) &&
+            !isFALSE(local_reactives$update_outputs),
+          message = "Please run the module first"
+        )
+      )
+      shiny::validate(
+        shiny::need(
+          isTRUE(local_data$results$valid),
+          message = "One or more errors while executing pipeline. Please check the notification."
+        )
+      )
+
+      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+
+      plots <- fragility_map_plots(results$repository, results$adj_frag_info$frag,
+                                   pipeline$get_settings(),"unranked",
+                                   dipsaus::parse_svec(input$display_electrodes),
+                                   input$sz_onset, input$thresholding,
+                                   as.numeric(unlist(strsplit(input$buckets, ","))))
+
+      plots$quant_heatmap
     })
   )
 }

@@ -5,11 +5,10 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-export_path <- "/Volumes/bigbrain/Fragility2024/Results_NIHFragiliity"
+export_path <- "/Volumes/OFZ1_T7/karaslab/Results_NIHFragiliity"
 
 pts <- dipsaus::parse_svec("94-102,131-139")
-pipeline_xls <- read.csv("/Volumes/bigbrain/Multipatient/patient_data_all_rev.csv")
-#pipeline_xls <- readxl::read_xlsx("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/FragilityEEGDataset_pipeline.xlsx")
+pipeline_xls <- read.csv("E:/karaslab/rave-pipelines/modules/karaslab_fragility/Outcome_Classification_ML/patient_data_all_rev.csv")
 pipeline_xls$subject[pts]
 
 for(i in pts){
@@ -40,35 +39,12 @@ for(i in pts){
     sozc <- sozc[sozc %in% electrodes]
   }
 
-  # display <- dipsaus::parse_svec(pipeline_xls$display_electrodes[i])
-  # if(is.null(display)){
-  #   display <- electrodes
-  # }
-  #sample_rate <- as.numeric(pipeline_xls$sample_rate[i])
-  #ictal_runs <- dipsaus::parse_svec(pipeline_xls$ictal_runs[i])
-  #epoch_times <- as.numeric(strsplit(pipeline_xls$epoch_times[i],",")[[1]])
-  #type <- pipeline_xls$type[i]
-  #import_format <- pipeline_xls$import_format[i]
-
   subject_check <- raveio::validate_subject(paste0(project,"/",subject_code),
                                             method = "basic", verbose = FALSE)
   subject_check$paths$data_path$valid
 
-  #HUP dataset
-  # HUP_i <- 5
-  #
-  # HUPxls <- readxl::read_xlsx("/Volumes/OFZ1_T7/karaslab/rave_data/bids_dir/HUPDataset/participantsHUP121923.xlsx")
-  # subject_code <- stringr::str_sub(HUPxls$participant_id[HUP_i], 4)
-  # project <- "HUPDataset"
-  # electrodes <- dipsaus::parse_svec(HUPxls$`good electrodes`[HUP_i])
-  # display <- electrodes
-  #
-  # ictal_runs <- seq_len(HUPxls$`ictal run`[HUP_i])
-  # sample_rate <- 512
-  # type <- tolower(HUPxls$implant[HUP_i])
-  # import_format <- names(raveio::IMPORT_FORMATS)[3]
-
   print(paste0("starting pipeline for pt: ", subject_code, ", ", condition))
+
   # Fragility ----------------------------------------------
   # Add `path` to force using devel pipeline
   fragility_pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
@@ -107,33 +83,7 @@ for(i in pts){
     sozc = sozc
   )
 
-  # # display image results in R ---------------------------------------
-  # #env <- fragility_pipeline$load_shared()
-  # source("./modules/karaslab_fragility/R/shared-plots.R")
-  # subject <- raveio::as_rave_subject(paste0(project,"/",subject_code))
-  #
-  # results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
-  #
-  # voltage reconstruction
-  # do.call(voltage_recon_plot, c(results[1:2],
-  #                               list(fragility_pipeline$get_settings("t_window"),
-  #                                    fragility_pipeline$get_settings("t_step"),
-  #                                    fragility_pipeline$get_settings("trial_num"),
-  #                                    timepoints = 1:1000,
-  #                                    elec_num = 1,
-  #                                    lambda = fragility_pipeline$get_settings("lambda"))
-  #                               ))
-  #
-  # # fragility map
-  # do.call(fragility_map_plot, c(results,
-  #                               list(fragility_pipeline$get_settings("display_electrodes"),
-  #                                    fragility_pipeline$get_settings("sz_onset"),
-  #                                    elec_list = subject$get_electrode_table(),
-  #                                    'sort_fmap' = 1,
-  #                                    'height' = 14)
-  #                               ))
-
-  # for plotting to pdf ---------------------------------------
+  # for saving output files ---------------------------------------
   # env <- fragility_pipeline$load_shared()
   source("./modules/karaslab_fragility/R/shared-plots.R")
 
@@ -150,10 +100,10 @@ for(i in pts){
       #results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
       # save unranked results
-      output_files(results$repository,results$adj_frag_info$frag_norank,fragility_pipeline$get_settings(),export,"norank")
+      output_files(results$repository,results$adj_frag_info$frag,fragility_pipeline$get_settings(),export,"norank")
 
       # save ranked results
-      output_files(results$repository,results$adj_frag_info$frag,fragility_pipeline$get_settings(),export,"ranked")
+      output_files(results$repository,results$adj_frag_info$frag_ranked,fragility_pipeline$get_settings(),export,"ranked")
 
       # print results to pdf
       pdf_path <- file.path(export, paste0(subject_code,'_',fragility_pipeline$get_settings("condition"),"_",format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))

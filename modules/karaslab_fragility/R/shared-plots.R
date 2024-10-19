@@ -1,4 +1,4 @@
-fragility_map_plot <- function(repository, adj_frag_info, threshold_elec, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10, threshold) {
+fragility_map_plot_old <- function(repository, adj_frag_info, threshold_elec, display_electrodes, sz_onset, elec_list, sort_fmap = 1, height = 10, threshold) {
 
   m <- adj_frag_info$frag[as.character(display_electrodes),]
   elecsort <- sort(as.numeric(attr(m, "dimnames")[[1]])) # electrode indices sorted by ascending number
@@ -160,117 +160,108 @@ voltage_recon_plot <- function(repository, adj_frag_info, t_window, t_step, tria
   g
 }
 
-frag_quantile <- function(repository, f, t_window, t_step, soz, sozc){
-  n_tps <- length(repository$voltage$dimnames$Time)
-  n_elec <- length(repository$voltage$dimnames$Electrode)
-  n_steps <- floor((n_tps - t_window) / t_step) + 1
-  epoch_time_window <- repository$time_windows[[1]]
-  fs <- repository$sample_rate
-  if(any(repository$electrode_table$Label == "NoLabel")) {
-    elec_names <- repository$electrode_table$Electrode[match(c(soz,sozc), repository$electrode_table$Electrode)]
-    elec_names <- as.character(elec_names)
-  } else {
-    elec_names <- repository$electrode_table$Label[match(c(soz,sozc), repository$electrode_table$Electrode)]
+voltage_plot <- function(repository, adj_frag_info, display_electrodes){
+
+  display_electrodes_i <- match(display_electrodes, repository$electrode_list)
+  vmat <- adj_frag_info$voltage[,display_electrodes_i]
+
+  #vmat <- vmat[seq(1,nrow(vmat),4),] # compress by factor of 4 to save plotting time
+
+  t <- dim(vmat)[1] # of timepoints
+  N <- dim(vmat)[2] # of electrodes
+  z <- (vmat - mean(vmat)) / sd(vmat) # z score
+
+  par(mar=c(3,6,0,0))
+  rutabaga::plot_clean(repository$voltage$dimnames$Time, -3:N*3)
+  axis(1)
+  abline(h=0:(N-1)*3, col = "skyblue") # add  horizontal lines
+
+  for(ii in 1:ncol(vmat)) {
+    lines(x = repository$voltage$dimnames$Time, y = z[,ii]+(ii-1)*3) # plot lines
   }
 
-  # create fragility map with soz electrodes separated from sozc electrodes
-  fmap <- f[as.character(c(soz,sozc)),]
-  stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
+  axis(2, at=0:(N-1)*3, repository$electrode_table$Label[display_electrodes_i], las=1, tcl=0) # electrode labels
+}
 
-  # raw fragility map
-  fplot <- expand.grid(Time = stimes, Electrode = elec_names)
-  fplot$Value <- c(t(fmap))
+fragility_map_plots <- function(repository, f, pipeline_settings, note, display_electrodes, sz_onset, thresholding, buckets) {
 
-  # create separate heatmaps for soz and sozc for quantile calcs
-  hmapsoz <- fmap[as.character(soz),]
-  hmapsozc <- fmap[as.character(sozc),]
+  subject_code <- pipeline_settings$subject_code
+  sz_num <- pipeline_settings$condition
+  t_window <- pipeline_settings$t_window
+  t_step <- pipeline_settings$t_step
+  soz <- pipeline_settings$soz
+  sozc <- pipeline_settings$sozc
+  epoch_time_window <- pipeline_settings$epoch_time_window
 
-  #f90soz=quantile(hmapsoz, probs=c(0.9))
-  #f90sozc=quantile(hmapsozc,probs=c(0.9))
-  #interpretabilityratiosoz=f90soz/f90sozc
+  quantile_results <- frag_quantile(repository, f, t_window, t_step, soz, sozc)
 
-  quantilematrixsozsozc=matrix(0,20,length(stimes))
-  cmeansoz=c(1:length(stimes))*0
-  cmeansozc=c(1:length(stimes))*0
-  csdsoz=c(1:length(stimes))*0
-  csdsozc=c(1:length(stimes))*0
+  # fragility heatmap
+  colorelec <- rep("black",length(c(soz,sozc)))
+  colorelec[1:length(soz)]="blue"
 
-  for(i in 1:length(stimes)){
+  titlepng=paste(subject_code,as.character(sz_num),note,"fragility",sep=" ")
 
-    colsoz=hmapsoz[,i]
-    colsozc=hmapsozc[,i]
+  # edit fplot from quantile_results for display
 
-    meansoz=mean(colsoz)
-    sdsoz=sd(colsoz)
-    meansozc=mean(colsozc)
-    sdsozc=sd(colsozc)
+  display_electrode_names <- repository$electrode_table$Label[match(display_electrodes,repository$electrode_table$Electrode)]
+  f_image_data <- dplyr::filter(quantile_results$fplot, Electrode%in%display_electrode_names) # only display selected electrodes
 
-    cmeansoz[i]=meansoz
-    cmeansozc[i]=meansozc
-    csdsoz[i]=sdsoz
-    csdsozc[i]=sdsozc
-
-    f10colsoz<-quantile(colsoz,probs=c(0.1))
-    f20colsoz<-quantile(colsoz,probs=c(0.2))
-    f30colsoz<-quantile(colsoz,probs=c(0.3))
-    f40colsoz<-quantile(colsoz,probs=c(0.4))
-    f50colsoz<-quantile(colsoz,probs=c(0.5))
-    f60colsoz<-quantile(colsoz,probs=c(0.6))
-    f70colsoz<-quantile(colsoz,probs=c(0.7))
-    f80colsoz<-quantile(colsoz,probs=c(0.8))
-    f90colsoz<-quantile(colsoz,probs=c(0.9))
-    f100colsoz<-quantile(colsoz,probs=c(1.0))
-
-    f10colsozc<-quantile(colsozc,probs=c(0.1))
-    f20colsozc<-quantile(colsozc,probs=c(0.2))
-    f30colsozc<-quantile(colsozc,probs=c(0.3))
-    f40colsozc<-quantile(colsozc,probs=c(0.4))
-    f50colsozc<-quantile(colsozc,probs=c(0.5))
-    f60colsozc<-quantile(colsozc,probs=c(0.6))
-    f70colsozc<-quantile(colsozc,probs=c(0.7))
-    f80colsozc<-quantile(colsozc,probs=c(0.8))
-    f90colsozc<-quantile(colsozc,probs=c(0.9))
-    f100colsozc<-quantile(colsozc,probs=c(1.0))
-
-    quantilematrixsozsozc[1,i]=f10colsoz
-    quantilematrixsozsozc[2,i]=f20colsoz
-    quantilematrixsozsozc[3,i]=f30colsoz
-    quantilematrixsozsozc[4,i]=f40colsoz
-    quantilematrixsozsozc[5,i]=f50colsoz
-    quantilematrixsozsozc[6,i]=f60colsoz
-    quantilematrixsozsozc[7,i]=f70colsoz
-    quantilematrixsozsozc[8,i]=f80colsoz
-    quantilematrixsozsozc[9,i]=f90colsoz
-    quantilematrixsozsozc[10,i]=f100colsoz
-    quantilematrixsozsozc[11,i]=f10colsozc
-    quantilematrixsozsozc[12,i]=f20colsozc
-    quantilematrixsozsozc[13,i]=f30colsozc
-    quantilematrixsozsozc[14,i]=f40colsozc
-    quantilematrixsozsozc[15,i]=f50colsozc
-    quantilematrixsozsozc[16,i]=f60colsozc
-    quantilematrixsozsozc[17,i]=f70colsozc
-    quantilematrixsozsozc[18,i]=f80colsozc
-    quantilematrixsozsozc[19,i]=f90colsozc
-    quantilematrixsozsozc[20,i]=f100colsozc
-
+  if (thresholding) {
+    f_image_data$Value <- threshold_buckets(as.matrix(f_image_data$Value),buckets)
   }
 
-  quantilesname<-c("SOZ(10th)","SOZ(20th)","SOZ(30th)","SOZ(40th)","SOZ(50th)",
-                   "SOZ(60th)","SOZ(70th)","SOZ(80th)","SOZ(90th)","SOZ(100th)",
-                   "SOZc(10th)","SOZc(20th)","SOZc(30th)","SOZc(40th)","SOZc(50th)",
-                   "SOZc(60th)","SOZc(70th)","SOZc(80th)","SOZc(90th)","SOZc(100th)")
-  quantileplot<- expand.grid(Time = stimes, Stats=quantilesname)
-  quantileplot$Value <- c(t(quantilematrixsozsozc))
+  f_image <- ggplot(f_image_data, aes(x = Time, y = Electrode, fill = Value)) +
+    geom_tile() +
+    ggtitle(titlepng)+
+    labs(x = "Time (s)", y = "Electrode") +
+    scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
+    geom_vline(xintercept = sz_onset) +
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 5,colour=colorelec),     # Adjust depending on electrodes
+    )
 
-  dimnames(quantilematrixsozsozc) <- list(
-    Quantile = quantilesname,
-    Time = stimes
-  )
+  # quantile map
+  titlepng=paste(subject_code,as.character(sz_num),"Quantiles",note,sep=" ")
+
+  if (thresholding) {
+    quantile_results$q_plot$Value <- threshold_buckets(as.matrix(quantile_results$q_plot$Value),buckets)
+  }
+
+  q_image <- ggplot(quantile_results$q_plot, aes(x = Time, y = Stats, fill = Value)) +
+    geom_tile() +
+    ggtitle(titlepng)+
+    labs(x = "Time (s)", y = "Statistic") +
+    scale_fill_gradient2(low="navy", mid="white", high="red",midpoint=0.5) +  #
+    theme_minimal() +
+    theme(
+      axis.text.y = element_text(size = 10),     # Adjust depending on electrodes
+    )
+
+  # average f over time windows
+  mean_f <- mean_f_plot(repository,f,soz,sozc)
+
+  # calculate seizure onset timewindow
+  sz_onset_twindow <- (sz_onset - epoch_time_window[1]) * dim(f)[2] / (epoch_time_window[2] - epoch_time_window[1])
+
+  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Avg Fragility Over Time",note,sep=" ")
+
+  df <- data.frame(1:length(mean_f$mean_f_soz),mean_f)
+
+  mean_plot <- ggplot(df, aes(1:length(mean_f_soz))) +
+    geom_line(aes(y=mean_f_soz, color = "SOZ +/- sem")) +
+    geom_line(aes(y=mean_f_sozc, color = "SOZc +/- sem")) +
+    geom_ribbon(aes(ymin = mean_f_soz - se_f_soz, ymax = mean_f_soz + se_f_soz), fill = "indianred3", alpha = 0.7) +
+    geom_ribbon(aes(ymin = mean_f_sozc - se_f_sozc, ymax = mean_f_sozc + se_f_sozc), fill = "grey30", alpha = 0.6) +
+    geom_vline(xintercept = sz_onset_twindow, color = "blue") +
+    scale_color_manual(values = c("SOZ +/- sem" = "red", "SOZc +/- sem" = "black")) +
+    labs(x = "Timewindow", y = "Average fragility per timewindow", color = "Legend") +
+    ggtitle(titlepng)
 
   return(list(
-    fplot = fplot,
-    q_matrix = quantilematrixsozsozc,
-    q_plot = quantileplot
+    frag_heatmap = f_image,
+    quant_heatmap = q_image,
+    mean_f_over_time = mean_plot
   ))
 }
 
