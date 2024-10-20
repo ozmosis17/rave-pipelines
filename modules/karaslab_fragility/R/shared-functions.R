@@ -515,6 +515,25 @@ frag_quantile <- function(repository, f, t_window, t_step, soz, sozc){
   ))
 }
 
+mean_f_calc <- function(repository, f, soz, sozc) {
+  mean_f_soz <- rep(0,dim(f)[2])
+  mean_f_sozc <- rep(0,dim(f)[2])
+  se_f_soz <- rep(0,dim(f)[2])
+  se_f_sozc <- rep(0,dim(f)[2])
+  for (i in seq_len(dim(f)[2])){
+    mean_f_soz[i] <- mean(f[as.character(soz),i])
+    se_f_soz[i] <- sd(f[as.character(soz),i])/sqrt(length(soz))
+    mean_f_sozc[i] <- mean(f[as.character(sozc),i])
+    se_f_sozc[i] <- sd(f[as.character(sozc),i]/sqrt(length(sozc)))
+  }
+  return(list(
+    mean_f_soz = mean_f_soz,
+    mean_f_sozc = mean_f_sozc,
+    se_f_soz = se_f_soz,
+    se_f_sozc = se_f_sozc
+  ))
+}
+
 threshold_buckets <- function(mat, thresholds) {
 
   thresholds <- sort(thresholds)

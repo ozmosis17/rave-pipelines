@@ -77,7 +77,14 @@ module_html <- function(){
                       label = "Seizure Onset Marker",
                       min = -10, max = 10, value = 0, width = "100%"
                     )
+                  ),
+                shidashi::flex_item(
+                  shiny::checkboxInput(
+                    inputId = ns("sepsoz"),
+                    label = "Separate SOZ electrodes? (displayed in red)",
+                    value = T
                   )
+                )
               ),
               ravedash::flex_group_box(
                 title = "Thresholding",
@@ -92,7 +99,7 @@ module_html <- function(){
                   shiny::textInput(
                     inputId = ns("buckets"),
                     label = "Threshold limits (must start with 0 and end with 1)",
-                    value = "0, 0.25, 0.5, 0.75, 1"
+                    value = "0, 0.25, 0.5, 0.9, 1"
                   )
                 )
               ),

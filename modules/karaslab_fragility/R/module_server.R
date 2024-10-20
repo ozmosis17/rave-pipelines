@@ -89,7 +89,8 @@ module_server <- function(input, output, session, ...){
         # check_interval = 0.1,
         # shortcut = TRUE,
         names = c(
-          "adj_frag_info"
+          "adj_frag_info",
+          "quantiles"
         )
       )
 
@@ -235,6 +236,9 @@ module_server <- function(input, output, session, ...){
       )
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+      display_electrodes <- dipsaus::parse_svec(input$display_electrodes)
+
+      voltage_plot(results$repository, results$adj_frag_info, display_electrodes)
 
       # do.call(voltage_recon_plot, c(results[1:2],
       #                               list(pipeline$get_settings("t_window"),
@@ -245,10 +249,6 @@ module_server <- function(input, output, session, ...){
       #                                    lambda = pipeline$get_settings("lambda"))
 
       # ))
-
-      display_electrodes <- dipsaus::parse_svec(input$display_electrodes)
-
-      voltage_plot(results$repository, results$adj_frag_info, display_electrodes)
     })
   )
 
@@ -273,21 +273,9 @@ module_server <- function(input, output, session, ...){
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      if(input$ranked){
-        note <- "ranked"
-        f <- results$adj_frag_info$frag_ranked
-      } else {
-        note <- "unranked"
-        f <- results$adj_frag_info$frag
-      }
-
-      plots <- fragility_map_plots(results$repository, f,
-                                   pipeline$get_settings(),note,
-                                   dipsaus::parse_svec(input$display_electrodes),
-                                   input$sz_onset, input$thresholding,
-                                   as.numeric(unlist(strsplit(input$buckets, ","))))
-
-      plots$frag_heatmap
+      fragility_plot(results$repository, results$adj_frag_info, pipeline$get_settings(),
+                     dipsaus::parse_svec(input$display_electrodes),
+                     input$ranked, input$sepsoz, input$thresholding, input$buckets)
     })
   )
 
@@ -312,13 +300,7 @@ module_server <- function(input, output, session, ...){
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      plots <- fragility_map_plots(results$repository, results$adj_frag_info$frag,
-                                   pipeline$get_settings(),"unranked",
-                                   dipsaus::parse_svec(input$display_electrodes),
-                                   input$sz_onset, input$thresholding,
-                                   as.numeric(unlist(strsplit(input$buckets, ","))))
-
-      plots$mean_f_over_time
+      avg_f_over_time_plot(results$repository, results$adj_frag_info, pipeline$get_settings())
     })
   )
 
@@ -341,15 +323,9 @@ module_server <- function(input, output, session, ...){
         )
       )
 
-      results <- pipeline$read(var_names = c("repository","adj_frag_info"))
+      results <- pipeline$read(var_names = c("repository","quantiles"))
 
-      plots <- fragility_map_plots(results$repository, results$adj_frag_info$frag,
-                                   pipeline$get_settings(),"unranked",
-                                   dipsaus::parse_svec(input$display_electrodes),
-                                   input$sz_onset, input$thresholding,
-                                   as.numeric(unlist(strsplit(input$buckets, ","))))
-
-      plots$quant_heatmap
+      quantiles_plot(results$repository, results$quantiles, pipeline$get_settings(), input$thresholding, input$buckets)
     })
   )
 }

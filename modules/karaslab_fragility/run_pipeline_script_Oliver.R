@@ -5,7 +5,7 @@ pipeline <- raveio::pipeline("karaslab_fragility", paths = "./modules/")
 library(readxl)
 library(stringr)
 
-export_path <- "/Volumes/OFZ1_T7/karaslab/Results_NIHFragiliity"
+export_path <- "/karaslab/Results_FragilityEEGDataset"
 
 pts <- dipsaus::parse_svec("94-102,131-139")
 pipeline_xls <- read.csv("E:/karaslab/rave-pipelines/modules/karaslab_fragility/Outcome_Classification_ML/patient_data_all_rev.csv")
@@ -85,6 +85,7 @@ for(i in pts){
 
   # for saving output files ---------------------------------------
   # env <- fragility_pipeline$load_shared()
+  source("./modules/karaslab_fragility/R/shared-functions.R")
   source("./modules/karaslab_fragility/R/shared-plots.R")
 
   tryCatch(
@@ -93,20 +94,22 @@ for(i in pts){
         file.create(file.path(export, paste0(subject_code,"_",fragility_pipeline$get_settings("condition"),"_ERROR")))
       }
     },{
-      results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","threshold_elec")))
+      results <- c(fragility_pipeline$run(c("repository", "adj_frag_info","quantiles")))
 
       # force evaluation
       #env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
       #results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
       # save unranked results
-      output_files(results$repository,results$adj_frag_info$frag,fragility_pipeline$get_settings(),export,"norank")
+      output_files(results$repository, results$adj_frag_info$frag, results$quantiles,
+                   fragility_pipeline$get_settings(),export,"norank")
 
       # save ranked results
-      output_files(results$repository,results$adj_frag_info$frag_ranked,fragility_pipeline$get_settings(),export,"ranked")
+      output_files(results$repository, results$adj_frag_info$frag_ranked, results$quantiles,
+                   fragility_pipeline$get_settings(),export,"ranked")
 
       # print results to pdf
-      pdf_path <- file.path(export, paste0(subject_code,'_',fragility_pipeline$get_settings("condition"),"_",format(Sys.time(), "%m-%d-%Y_%H%M%S"),'.pdf'))
+      pdf_path <- file.path(export, paste0(subject_code,'_',fragility_pipeline$get_settings("condition"),"_reconstruction.pdf"))
       grDevices::pdf(pdf_path, width = 12, height = 7)
       par(mfrow=c(2,1),mar=rep(2,4))
 
@@ -121,15 +124,15 @@ for(i in pts){
       ))
       print(g)
 
-      # old fragility heatmap
-      do.call(fragility_map_plot, c(results,
-                                    list(fragility_pipeline$get_settings("display_electrodes"),
-                                         fragility_pipeline$get_settings("sz_onset"),
-                                         elec_list = elec_list,
-                                         'sort_fmap' = 1,
-                                         'height' = 14,
-                                         threshold = fragility_pipeline$get_settings("threshold"))
-      ))
+      # # old fragility heatmap
+      # do.call(fragility_map_plot_old, c(results,
+      #                               list(fragility_pipeline$get_settings("display_electrodes"),
+      #                                    fragility_pipeline$get_settings("sz_onset"),
+      #                                    elec_list = elec_list,
+      #                                    'sort_fmap' = 1,
+      #                                    'height' = 14,
+      #                                    threshold = fragility_pipeline$get_settings("threshold"))
+      # ))
 
       grDevices::dev.off()
     })

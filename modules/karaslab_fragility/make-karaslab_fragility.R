@@ -2,6 +2,7 @@ library(targets)
 library(raveio)
 source("common.R", local = TRUE, chdir = TRUE)
 ._._env_._. <- environment()
+._._env_._.$pipeline <- pipeline_from_path(".")
 lapply(sort(list.files(
   "R/", ignore.case = TRUE,
   pattern = "^shared-.*\\.R", 
@@ -16,9 +17,18 @@ rm(._._env_._.)
     quote({
         yaml::read_yaml(settings_path)
     }), deps = "settings_path", cue = targets::tar_cue("always")), 
-    input_threshold = targets::tar_target_raw("threshold", quote({
-        settings[["threshold"]]
-    }), deps = "settings"), input_threshold_end = targets::tar_target_raw("threshold_end", 
+    input_sozc = targets::tar_target_raw("sozc", quote({
+        settings[["sozc"]]
+    }), deps = "settings"), input_soz = targets::tar_target_raw("soz", 
+        quote({
+            settings[["soz"]]
+        }), deps = "settings"), input_condition = targets::tar_target_raw("condition", 
+        quote({
+            settings[["condition"]]
+        }), deps = "settings"), input_threshold = targets::tar_target_raw("threshold", 
+        quote({
+            settings[["threshold"]]
+        }), deps = "settings"), input_threshold_end = targets::tar_target_raw("threshold_end", 
         quote({
             settings[["threshold_end"]]
         }), deps = "settings"), input_threshold_start = targets::tar_target_raw("threshold_start", 
@@ -196,32 +206,29 @@ rm(._._env_._.)
             }), target_depends = c("repository", "trial_num", 
             "t_window", "t_step", "lambda")), deps = c("repository", 
         "trial_num", "t_window", "t_step", "lambda"), cue = targets::tar_cue("thorough"), 
-        pattern = NULL, iteration = "list"), find_threshold_elec = targets::tar_target_raw(name = "threshold_elec", 
+        pattern = NULL, iteration = "list"), find_quantiles = targets::tar_target_raw(name = "quantiles", 
         command = quote({
             .__target_expr__. <- quote({
-                threshold_elec <- threshold_fragility(repository = repository, 
-                  adj_frag_info = adj_frag_info, t_step = t_step, 
-                  threshold_start = threshold_start, threshold_end = threshold_end, 
-                  threshold = threshold)
+                quantiles <- frag_quantile(repository = repository, 
+                  f = adj_frag_info$frag, t_window = t_window, 
+                  t_step = t_step, soz = soz, sozc = sozc)
             })
             tryCatch({
                 eval(.__target_expr__.)
-                return(threshold_elec)
+                return(quantiles)
             }, error = function(e) {
-                asNamespace("raveio")$resolve_pipeline_error(name = "threshold_elec", 
+                asNamespace("raveio")$resolve_pipeline_error(name = "quantiles", 
                   condition = e, expr = .__target_expr__.)
             })
         }), format = asNamespace("raveio")$target_format_dynamic(name = NULL, 
-            target_export = "threshold_elec", target_expr = quote({
+            target_export = "quantiles", target_expr = quote({
                 {
-                  threshold_elec <- threshold_fragility(repository = repository, 
-                    adj_frag_info = adj_frag_info, t_step = t_step, 
-                    threshold_start = threshold_start, threshold_end = threshold_end, 
-                    threshold = threshold)
+                  quantiles <- frag_quantile(repository = repository, 
+                    f = adj_frag_info$frag, t_window = t_window, 
+                    t_step = t_step, soz = soz, sozc = sozc)
                 }
-                threshold_elec
+                quantiles
             }), target_depends = c("repository", "adj_frag_info", 
-            "t_step", "threshold_start", "threshold_end", "threshold"
-            )), deps = c("repository", "adj_frag_info", "t_step", 
-        "threshold_start", "threshold_end", "threshold"), cue = targets::tar_cue("thorough"), 
-        pattern = NULL, iteration = "list"))
+            "t_window", "t_step", "soz", "sozc")), deps = c("repository", 
+        "adj_frag_info", "t_window", "t_step", "soz", "sozc"), 
+        cue = targets::tar_cue("thorough"), pattern = NULL, iteration = "list"))
