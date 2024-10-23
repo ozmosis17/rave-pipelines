@@ -43,7 +43,7 @@ fragility_plot <- function(repository, adj_frag_info, pipeline_settings, display
   n_elec <- length(repository$voltage$dimnames$Electrode)
   n_steps <- floor((n_tps - t_window) / t_step) + 1
   epoch_time_window <- repository$time_windows[[1]]
-  fs <- repository$sample_rate
+  fs <- round(repository$sample_rate,-1)
   if(any(repository$electrode_table$Label == "NoLabel")) {
     elec_names <- repository$electrode_table$Electrode[match(c(soz,sozc), repository$electrode_table$Electrode)]
     elec_names <- as.character(elec_names)
@@ -106,7 +106,7 @@ avg_f_over_time_plot <- function(repository, adj_frag_info, pipeline_settings) {
   n_elec <- length(repository$voltage$dimnames$Electrode)
   n_steps <- floor((n_tps - t_window) / t_step) + 1
   epoch_time_window <- repository$time_windows[[1]]
-  fs <- repository$sample_rate
+  fs <- round(repository$sample_rate,-1)
 
   stimes <- (seq_len(n_steps)-1)*t_step/fs+epoch_time_window[1]
 
