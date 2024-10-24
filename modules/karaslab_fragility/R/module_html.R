@@ -101,6 +101,13 @@ module_html <- function(){
                     label = "Threshold limits (must start with 0 and end with 1)",
                     value = "0, 0.25, 0.5, 0.9, 1"
                   )
+                ),
+                shidashi::flex_item(
+                  shiny::numericInput(
+                    inputId = ns("moving_avg_width"),
+                    label = "Moving average width (leave at 1 for no moving average)",
+                    value = 1
+                  )
                 )
               ),
               ravedash::flex_group_box(

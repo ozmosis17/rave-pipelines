@@ -300,7 +300,7 @@ module_server <- function(input, output, session, ...){
 
       results <- pipeline$read(var_names = c("repository","adj_frag_info"))
 
-      avg_f_over_time_plot(results$repository, results$adj_frag_info, pipeline$get_settings())
+      avg_f_over_time_plot(results$repository, results$adj_frag_info, pipeline$get_settings(),input$moving_avg_width)
     })
   )
 

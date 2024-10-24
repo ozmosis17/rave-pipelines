@@ -559,7 +559,7 @@ threshold_buckets <- function(mat, thresholds) {
 
 moving_average <- function(x, n) {
   x_ma <- stats::filter(x, rep(1 / n, n), sides = 2)
-  x_ma[is.na(x_ma)] <- x[is.na(x_ma)]
+  x_ma[is.na(x_ma)] <- x[is.na(x_ma)] # replace NAs at beginning and end with original values
   return(as.vector(x_ma))
 }
 

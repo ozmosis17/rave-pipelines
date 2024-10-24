@@ -91,7 +91,7 @@ fragility_plot <- function(repository, adj_frag_info, pipeline_settings, display
     )
 }
 
-avg_f_over_time_plot <- function(repository, adj_frag_info, pipeline_settings) {
+avg_f_over_time_plot <- function(repository, adj_frag_info, pipeline_settings, moving_avg_width = 1) {
 
   subject_code <- pipeline_settings$subject_code
   t_window <- pipeline_settings$t_window
@@ -113,9 +113,16 @@ avg_f_over_time_plot <- function(repository, adj_frag_info, pipeline_settings) {
   # average f over time windows
   mean_f <- mean_f_calc(repository,adj_frag_info$frag,soz,sozc)
 
-  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Average Fragility Over Time",sep=" ")
+  if (moving_avg_width > 1) {
+    mean_f <- lapply(mean_f, function(x) {
+      x_ma <- moving_average(x,moving_avg_width)
+      return(x_ma)
+    })
+  }
 
   df <- data.frame(stimes,mean_f)
+
+  titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Average Fragility Over Time",sep=" ")
 
   ggplot(df, aes(stimes)) +
     geom_line(aes(y=mean_f_soz, color = "SOZ +/- sem")) +
@@ -132,6 +139,7 @@ quantiles_plot <- function(repository, quantile_results, pipeline_settings, thre
 
   subject_code <- pipeline_settings$subject_code
   sz_num <- pipeline_settings$condition
+  sz_onset <- pipeline_settings$sz_onset
 
   # quantile map
   titlepng=paste(subject_code,as.character(sz_num),"Quantiles",sep=" ")
@@ -152,7 +160,7 @@ quantiles_plot <- function(repository, quantile_results, pipeline_settings, thre
     )
 }
 
-output_files <- function(repository,f, quantile_results, pipeline_settings,export,note) {
+output_files <- function(repository, f, quantile_results, pipeline_settings, export, note, moving_avg_width = NULL) {
 
   raveio::dir_create2(paste0(export,"/",note))
 
@@ -213,21 +221,27 @@ output_files <- function(repository,f, quantile_results, pipeline_settings,expor
   # average f over time windows
   mean_f <- mean_f_calc(repository,f,soz,sozc)
 
-  # calculate seizure onset timewindow
-  sz_onset_twindow <- (sz_onset - epoch_time_window[1]) * dim(f)[2] / (epoch_time_window[2] - epoch_time_window[1])
+  stimes <- as.numeric(attr(quantile_results$q_matrix,"dimnames")$Time)
+
+  if (!is.null(moving_avg_width)) {
+    mean_f <- raveio::lapply_async(mean_f, function(x) {
+      x_ma <- moving_average(x,moving_avg_width)
+      return(x_ma)
+    })
+  }
+
+  df <- data.frame(stimes,mean_f)
 
   titlepng=paste(subject_code,"Seizure",as.character(sz_num),"Avg Fragility Over Time",note,sep=" ")
 
-  df <- data.frame(1:length(mean_f$mean_f_soz),mean_f)
-
-  ggplot(df, aes(1:length(mean_f_soz))) +
+  ggplot(df, aes(stimes)) +
     geom_line(aes(y=mean_f_soz, color = "SOZ +/- sem")) +
     geom_line(aes(y=mean_f_sozc, color = "SOZc +/- sem")) +
     geom_ribbon(aes(ymin = mean_f_soz - se_f_soz, ymax = mean_f_soz + se_f_soz), fill = "indianred3", alpha = 0.7) +
     geom_ribbon(aes(ymin = mean_f_sozc - se_f_sozc, ymax = mean_f_sozc + se_f_sozc), fill = "grey30", alpha = 0.6) +
-    geom_vline(xintercept = sz_onset_twindow, color = "blue") +
+    geom_vline(xintercept = sz_onset, color = "blue") +
     scale_color_manual(values = c("SOZ +/- sem" = "red", "SOZc +/- sem" = "black")) +
-    labs(x = "Timewindow", y = "Average fragility per timewindow", color = "Legend") +
+    labs(x = "Time", y = "Average Fragility", color = "Legend") +
     ggtitle(titlepng)
 
   mean_plot <- paste0(export,"/",note,"/",subject_code,"_",sz_num,"_meanplot_",note,".png")

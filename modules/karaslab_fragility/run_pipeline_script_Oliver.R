@@ -100,13 +100,15 @@ for(i in pts){
       #env <- c(fragility_pipeline$eval(c("repository", "adj_frag_info","threshold_elec")), shortcut = TRUE)
       #results <- list(repository = env[[1]]$repository, adj_frag_info = env[[1]]$adj_frag_info, threshold_elec = env[[1]]$threshold_elec)
 
+      moving_average_width <- 10
+
       # save unranked results
       output_files(results$repository, results$adj_frag_info$frag, results$quantiles,
-                   fragility_pipeline$get_settings(),export,"norank")
+                   fragility_pipeline$get_settings(),export,"norank", moving_average_width)
 
       # save ranked results
       output_files(results$repository, results$adj_frag_info$frag_ranked, results$quantiles,
-                   fragility_pipeline$get_settings(),export,"ranked")
+                   fragility_pipeline$get_settings(),export,"ranked", moving_average_width)
 
       # print results to pdf
       pdf_path <- file.path(export, paste0(subject_code,'_',fragility_pipeline$get_settings("condition"),"_reconstruction.pdf"))
