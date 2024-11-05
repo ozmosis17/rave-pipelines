@@ -341,10 +341,10 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     ## each column is coefficients from a linear regression
     ## formula: xtp1 = xt*A + E
     if (class(lambda) == "numeric") {
-      message(paste0("running with lambda = ", lambda))
+      #message(paste0("running with lambda = ", lambda))
       Ai <- ridge(xt, xtp1, intercept = F, lambda = lambda, iw = iw)
     } else if (class(lambda) == "logical") {
-      message("running lambda search")
+      #message("running lambda search")
       Ai <- ridgesearchlambdadichomotomy(xt, xtp1, intercept = F, iw = iw)
     }
 
@@ -355,7 +355,7 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     sprintf("Generating Adjacency Matrices|Timewindow %s", iw)
   })
 
-  A <- unlist(raveio::lapply_async(res, function(w){
+  A <- unlist(lapply(res, function(w){
     w$Ai
   }))
   dim(A) <- c(n_elec, n_elec, n_steps)
@@ -365,7 +365,7 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     Step = seq_len(n_steps)
   )
 
-  R2 <- unlist(raveio::lapply_async(res, function(w){
+  R2 <- unlist(lapply(res, function(w){
     w$R2
   }))
   dim(R2) <- c(n_elec, n_steps)
@@ -373,6 +373,12 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     Electrode = repository$electrode_list,
     Step = seq_len(n_steps)
   )
+
+  lambdas <- rep(NA, length(res))
+
+  for(i in seq_len(n_steps)){
+    lambdas[i] <- attr(res[[i]]$Ai,"lambdaopt")
+  }
 
   # calculate fragility
   f <- unlist(raveio::lapply_async(seq_len(n_steps), function(iw){
@@ -397,7 +403,8 @@ calc_adj_frag <- function(repository, trial_num, t_window, t_step, lambda) {
     adj = A,
     frag = f,
     frag_ranked = f_rank,
-    R2 = R2
+    R2 = R2,
+    lambdas = lambdas
   ))
 }
 
