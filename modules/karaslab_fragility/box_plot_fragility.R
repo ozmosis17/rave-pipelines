@@ -74,14 +74,12 @@ nanpow2db <- function(y){
   return(ydB)
 }
 
-pts <- dipsaus::parse_svec("1-61")
-pts <- dipsaus::parse_svec("62-151")
+pts <- dipsaus::parse_svec("1-35,37-42,50-60,65-67,75-76,121,125,127,135,157-159")
 patient_key <- read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/patient_data_all_rev.csv")
 #patient_key <- readxl::read_xlsx("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/FragilityEEGDataset_pipeline.xlsx")
 patient_key$subject[pts]
 
-folder <- "/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Results_NIHFragility"
-folder <- "/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Results_FragilityLambdaSearch"
+folder <- "/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Results/250-125"
 #folder <- "/Volumes/OFZ1_T7/karaslab/Results_FragilityLambdaSearch"
 #folder <- "/Users/ozhou/Downloads/Results_FragilityLambdaSearch"
 note <- "norank"
@@ -347,3 +345,5 @@ t_test_result <- t.test(group_0, group_1)
 # Print t-test result
 print("Seizure Free Not EZ vs Not Seizure Free Not EZ: T-test result:")
 print(t_test_result)
+
+p.adjust(c(5.279e-08, 0.03786, 0.8105, 0.00257), method = "bonferroni")

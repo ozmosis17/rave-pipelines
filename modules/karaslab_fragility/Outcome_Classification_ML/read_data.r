@@ -88,10 +88,12 @@ nanpow2db <- function(y){
   return(ydB)
 }
 
-pts <- dipsaus::parse_svec("1-42,50-60")
+pts <- dipsaus::parse_svec("1-35,37-42,50-60,65-67,75-76,121,125,127,135,157-159")
+#pts <- dipsaus::parse_svec("1-35,37-42,45-60")
+
 # Read patient key data
 patient_key <-
-    read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/rave-pipelines/modules/karaslab_fragility/Outcome_Classification_ML/patient_data_all_rev.csv", header = TRUE, stringsAsFactors = FALSE)|>
+    read.csv("/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/patient_data_all_rev.csv", header = TRUE, stringsAsFactors = FALSE)|>
     mutate(
       condition = gsub("\\s.*", "", condition)
     )|>
@@ -102,7 +104,7 @@ patient_key$subject_code
 
 # Set the directory path
 # List of directories for each frequency range
-folder <- "/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Results_FragilityEEGDataset"
+folder <- "/Users/ozhou/Library/CloudStorage/OneDrive-TexasA&MUniversity/Karas Lab/Results/250-125"
 
 note <- "norank"
 csv_files <- NULL
@@ -191,9 +193,11 @@ all_dataframes_annotation2 <-
 times <- lapply(all_dataframes, function(x) as.numeric(gsub("^\\.","\\-",gsub("^X", "", colnames(x)))))
 
 # identify patient with lowest sample rate
-sapply(times,length)
-minNumReadings_i <- which.min(sapply(times, length))
-minNumReadings <- all_dataframes[[minNumReadings_i]]
+# sapply(times,length)
+# minNumReadings_i <- which.min(sapply(times, length))
+#minNumReadings <- all_dataframes[[minNumReadings_i]]
+
+minNumReadings <- min(sapply(times,length))
 
 # Initialize patient_data dataframe
 patient_data <- list()
@@ -202,7 +206,13 @@ for(i in seq_len(nrow(all_dataframes_annotation2))){
       condition <- all_dataframes_annotation2$condition[i]
       # truncate data to match lowest sample rate patient
       #print(i)
-      data_over_time_per_elec <- all_dataframes[[i]][, colnames(minNumReadings)]
+      #data_over_time_per_elec <- all_dataframes[[i]][, colnames(minNumReadings)]
+
+      mult <- ncol(all_dataframes[[i]])/minNumReadings
+
+      idx <- round(seq(1,ncol(all_dataframes[[i]]),mult))
+
+      data_over_time_per_elec <- all_dataframes[[i]][, idx]
 
       colnames(data_over_time_per_elec) <- paste0("X", seq_len(ncol(data_over_time_per_elec)))
 
@@ -266,16 +276,18 @@ for(i in seq_len(nrow(all_dataframes_annotation2))){
 patient_data <- do.call(rbind, patient_data)
 
 Positive <- c("subpt01", "subpt2", "subpt3", "subpt8", "subpt11", "subpt13",
-              "subpt17", "subpt15", "subpt16", "subummc002", "subummc005", "subummc009",
-              "subjh105", "subumf001")
-Negative <- c("subpt6", "subpt7", "subpt10", "subpt12", "subpt14", "subjh101", "subjh103")
+              "subpt17", "subpt15", "subpt16","subummc002","subummc005","subummc009",
+              "subjh105", "subNIH032", "subNIH070", "subHUP070", "subHUP134", "subHUP163")
+Negative <- c("subpt6", "subpt7", "subpt10", "subpt12", "subpt14", "subjh101", "subjh103",
+              "subNIH016", "subNIH041", "subNIH046")
 
 # Create outcome column
 patient_data$outcome <- ifelse(patient_data$patient_code %in% Positive, 1,
                                ifelse(patient_data$patient_code %in% Negative, 0, NA))
 
 ## make the table wide format
-value_columns <- paste0("X", seq_len(length(minNumReadings)))
+#value_columns <- paste0("X", seq_len(length(minNumReadings)))
+value_columns <- paste0("X", seq_len(minNumReadings))
 
 long_data <- patient_data %>%
   pivot_longer(
