@@ -89,16 +89,16 @@ adj_frag_info <- calc_adj_frag(
 )
 ```
 
-#### Step 4: Find Electrodes Above Fragility Threshold
+#### Step 4: Find Quantiles
 
-```{rave find_threshold_elec, language = "R", export = "threshold_elec"}
-threshold_elec <- threshold_fragility(
+```{rave find_quantiles, language = "R", export = "quantiles"}
+quantiles <- frag_quantile(
   repository = repository,
-  adj_frag_info = adj_frag_info,
+  f = adj_frag_info$frag,
+  t_window = t_window,
   t_step = t_step,
-  threshold_start = threshold_start,
-  threshold_end = threshold_end,
-  threshold = threshold
+  soz = soz,
+  sozc = sozc
 )
 ```
 

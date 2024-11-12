@@ -22,8 +22,6 @@ loader_html <- function(session = shiny::getDefaultReactiveDomain()){
           )
         ),
 
-        # shiny::numericInput(inputId = ns('junk'), "My input", value = 9),
-
         loader_epoch$ui_func(),
 
         ravedash::flex_group_box(
